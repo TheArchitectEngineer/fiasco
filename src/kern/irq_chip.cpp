@@ -268,17 +268,8 @@ public:
    */
   bool __mask()
   {
-    Mword old;
-    // Replace by atomic_fetch_and()!
-    do
-      {
-        old = _flags;
-        if (!(old & F_enabled))
-          return true;
-      }
-    while (!cas(&_flags, old, old & ~F_enabled));
-
-    return false;
+    Mword old = atomic_fetch_and(&_flags, ~F_enabled);
+    return !(old & F_enabled);
   }
 
   /**
@@ -288,17 +279,8 @@ public:
    */
   bool __unmask()
   {
-    Mword old;
-    // Replace by atomic_fetch_or()!
-    do
-      {
-        old = _flags;
-        if (old & F_enabled)
-          return false;
-      }
-    while (!cas(&_flags, old, old | F_enabled));
-
-    return true;
+    Mword old = atomic_fetch_or(&_flags, F_enabled);
+    return !(old & F_enabled);
   }
 
   void set_hit(Hit_func f) { hit_func = f; }
