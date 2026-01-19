@@ -62,6 +62,9 @@ INTERFACES_KERNEL-y$(CONFIG_NDEBUG) += assertion
 obj_space_IMPL = obj_space obj_space-phys
 PREPROCESS_PARTS-$(CONFIG_PHYS_OBJ_SPACE_AVL) += obj_space_phys_avl
 
+INTERFACES_KERNEL-$(CONFIG_PRIO_INHERIT) += pi_mutex
+PREPROCESS_PARTS-$(CONFIG_PRIO_INHERIT) += prio_inherit
+
 kdb_ke_IMPL             := kdb_ke
 kip_init_IMPL           := kip_init
 platform_control_IMPL   := platform_control

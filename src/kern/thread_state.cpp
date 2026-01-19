@@ -89,6 +89,11 @@ enum Thread_state
   // 0x4000000 used by MIPS
   // 0x4000000 used by RISC-V
 
+  /// Thread waits for a priority inheritance mutex.
+  Thread_pi_mutex_wait        = 0x8000000,
+  /// Thread needs reschedule because its PI effective priority has changed.
+  Thread_pi_resched           = 0x10000000,
+
   Thread_vcpu_state_mask      = Thread_vcpu_enabled | Thread_vcpu_user
                                 | Thread_vcpu_fpu_disabled
                                 | Thread_ext_vcpu_enabled

@@ -36,7 +36,9 @@ Jdb_thread::print_state_bits(Mword bits, unsigned max_size)
                                         "exc_progr",
       cxx::const_ite<TAG_ENABLED(pagefault_trampoline)>("pf_tramp", "0x80000"),
       "drq",           "rcu_wait",      "vcpu",         "vcpu_user",
-      "vcpu_fpu_disabled", "vcpu_ext"
+      "vcpu_fpu_disabled", "vcpu_ext", "<0x4000000>",
+      cxx::const_ite<TAG_ENABLED(prio_inherit)>("pi_mutex_wait", "<0x8000000>"),
+      cxx::const_ite<TAG_ENABLED(prio_inherit)>("pi_resched", "<0x10000000>"),
     };
 
   unsigned chars = 0;

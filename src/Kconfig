@@ -347,6 +347,15 @@ config SCHED_DEF_TIME_SLICE
 	help
 	  Default thread time slice in scheduler ticks.
 
+config PRIO_INHERIT
+	bool "Support priority inheritance mutexes"
+	depends on SCHED_FIXED_PRIO
+	default y
+	help
+	  The kernel provides a priority-inheritance mutex object that
+	  user-space then uses to implement priority inheritance-aware mutexes,
+	  to mitigate the effects of priority inversion.
+
 config IOMMU
 	bool "Enable IOMMU support" if HAS_IOMMU_OPTION
 	depends on HAS_IOMMU_OPTION

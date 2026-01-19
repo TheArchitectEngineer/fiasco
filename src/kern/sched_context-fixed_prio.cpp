@@ -48,13 +48,50 @@ public:
 
 private:
   unsigned short _prio;
-  Unsigned64 _quantum;
-  Unsigned64 _left;
 
   friend class Ready_queue_fp<Sched_context>;
 };
 
+//----------------------------------------------------------------------------
+INTERFACE [sched_fixed_prio && prio_inherit]:
 
+EXTENSION class Sched_context
+{
+public:
+  inline unsigned short pi_regular_prio() const
+  { return _pi_regular_prio; }
+
+  inline unsigned short pi_effective_prio() const
+  { return _pi_effective_prio; }
+
+  inline void set_pi_effective_prio(unsigned short new_prio)
+  { _pi_effective_prio = new_prio; }
+
+private:
+  /// Regular priority of the Sched_context's thread.
+  unsigned short _pi_regular_prio = Config::Default_prio;
+
+  /**
+   * Effective priority of the Sched_context's thread.
+   *
+   * Defined as the maximum of its regular priority and the effective priority
+   * of all its predecessors in the PI chain. In other words the transitive set
+   * of all threads that wait on a mutex owned by that thread.
+   */
+  unsigned short _pi_effective_prio = Config::Default_prio;
+};
+
+//----------------------------------------------------------------------------
+INTERFACE [sched_fixed_prio]:
+
+EXTENSION class Sched_context
+{
+private:
+  Unsigned64 _quantum;
+  Unsigned64 _left;
+};
+
+//----------------------------------------------------------------------------
 IMPLEMENTATION [sched_fixed_prio]:
 
 #include <cassert>
@@ -82,6 +119,18 @@ unsigned short
 Sched_context::prio() const
 {
   return _prio;
+}
+
+/**
+ * Set priority of Sched_context
+ *
+ * \pre Sched_context must not be enqueued in ready queue.
+ */
+PUBLIC inline
+void
+Sched_context::set_prio(unsigned short prio)
+{
+  _prio = prio;
 }
 
 PUBLIC static inline
@@ -138,6 +187,7 @@ Sched_context::set(L4_sched_param const *_p)
       _quantum = p->legacy_fixed_prio.quantum;
       if (p->legacy_fixed_prio.quantum == 0)
         _quantum = Config::default_time_slice();
+      sync_pi_prio();
       return;
     }
 
@@ -151,6 +201,7 @@ Sched_context::set(L4_sched_param const *_p)
       _quantum = p->fixed_prio.quantum;
       if (p->fixed_prio.quantum == 0)
         _quantum = Config::default_time_slice();
+      sync_pi_prio();
       break;
 
     default:
@@ -201,3 +252,45 @@ bool
 Sched_context::dominates(Sched_context *sc)
 { return prio() > sc->prio(); }
 
+
+//----------------------------------------------------------------------------
+IMPLEMENTATION [sched_fixed_prio && !prio_inherit]:
+
+PRIVATE inline
+void
+Sched_context::sync_pi_prio()
+{}
+
+//----------------------------------------------------------------------------
+IMPLEMENTATION [sched_fixed_prio && prio_inherit]:
+
+PRIVATE
+void
+Sched_context::sync_pi_prio()
+{
+  auto old_regular_prio = _pi_regular_prio;
+
+  // Update regular prio of thread.
+  _pi_regular_prio = _prio;
+
+  // TODO: Changing prio of mutex that owns or blocks on PI mutex is currently
+  //       not supported, i.e. it might mess up priorities in PI chain. To
+  //       properly support this we would need to propagate the changed priority
+  //       through the PI chain.
+
+  // We do a heuristic check here, i.e. without holding the PI chain lock, of
+  // whether the context is engaged in PI to avoid messing up PI chain
+  // priorities on a best effort basis.
+  if (old_regular_prio != _pi_effective_prio)
+    {
+      // If thread is engaged with PI mutex, avoid dropping below effective prio.
+      if (_prio < _pi_effective_prio)
+        _prio = _pi_effective_prio;
+    }
+  else
+    {
+      // If thread is not engaged with PI mutex, keep effective and regular prio
+      // in sync.
+      _pi_effective_prio = _pi_regular_prio;
+    }
+}

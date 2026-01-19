@@ -588,6 +588,8 @@ Thread::do_kill()
   // Must not be engaged in any IPC send operation at this point.
   assert(!in_sender_list());
 
+  release_owned_pi_mutexes();
+
   if (utcb().kern())
     utcb().access()->free_marker = Utcb::Free_marker;
   // No UTCB access beyond this point!

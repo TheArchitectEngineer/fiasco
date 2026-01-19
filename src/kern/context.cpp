@@ -472,6 +472,70 @@ private:
   static Per_cpu<Kernel_drq> _kernel_drq;
 };
 
+//----------------------------------------------------------------------------
+INTERFACE [prio_inherit]:
+
+#include "prio_list.h"
+
+class Pi_mutex_iface : public Prio_list_elem
+{
+public:
+  /**
+   * When a thread is killed it must invoke this callback on each PI mutex that
+   * it owns.
+   *
+   * \param self  Owner that wants to release the mutex.
+   *
+   * \pre `cpu_lock` must be held.
+   *
+   * \note This function is a preemption point.
+   */
+  virtual void release_owner_on_kill(Context *self) = 0;
+};
+
+struct Pi_mutex_waiter;
+
+EXTENSION class Context
+{
+public:
+  inline unsigned short pi_regular_prio() const
+  { return _sched_context.pi_regular_prio(); }
+
+  inline unsigned short pi_effective_prio() const
+  { return _sched_context.pi_effective_prio(); }
+
+  inline void set_pi_effective_prio(unsigned short new_prio)
+  { _sched_context.set_pi_effective_prio(new_prio); }
+
+  inline Pi_mutex_waiter *pi_blocked_on() const
+  { return _pi_blocked_on; }
+
+  inline void set_pi_blocked_on(Pi_mutex_waiter *blocked_on)
+  { _pi_blocked_on = blocked_on; }
+
+  inline Locked_prio_list &pi_owned_mutexes()
+  { return _pi_owned_mutexes; }
+
+private:
+  /// Mutex this thread is blocked on.
+  Pi_mutex_waiter *_pi_blocked_on = nullptr;
+
+  /**
+   * List of all the PI mutexes this thread owns.
+   *
+   * Lock requirements:
+   * - To access _pi_owned_mutexes, either the list's lock or the _pi_chain_lock
+   *   must be held.
+   * - To modify _pi_owned_mutexes, both the _pi_chain_lock and the list's lock
+   *   must be held. To avoid deadlocks the lock order is important:
+   *   The _pi_chain_lock has to be acquired first.
+   *
+   * The idea here is to enable a dying thread to iterate and eventually release
+   * all the locks it owns.
+   */
+  Locked_prio_list/*<Pi_mutex_iface>*/ _pi_owned_mutexes;
+};
+
 INTERFACE [recover_jmpbuf]:
 
 #include <csetjmp>
@@ -1272,8 +1336,8 @@ Context::Drq_q::execute_request(Drq *r, bool local)
       );
       //LOG_MSG_3VAL(current(), "hrP", current_cpu(), (Mword)r->context(), (Mword)r->func);
       self->state_change_dirty(~Thread_drq_wait, Thread_ready);
-      self->handle_remote_state_change();
-      return Reschedule::if_zero(self->state() & Thread_ready_mask);
+      need_resched |= self->handle_remote_state_change();
+      need_resched |= Reschedule::if_zero(self->state() & Thread_ready_mask);
     }
   else
     {
@@ -1289,7 +1353,7 @@ Context::Drq_q::execute_request(Drq *r, bool local)
       Drq::Result answer = Drq::done();
       if (r->func != nullptr) [[likely]]
         {
-          self->handle_remote_state_change();
+          need_resched |= self->handle_remote_state_change();
           answer = r->func(r, self, r->arg);
         }
 
@@ -1449,12 +1513,17 @@ Context::queue_item()
   return &_drq;
 }
 
-PROTECTED inline
-void
+/**
+ * Apply remote state change.
+ *
+ * \return Whether reschedule is necessary.
+ */
+PROTECTED inline NEEDS[Context::handle_remote_state_change_pi_resched]
+Reschedule
 Context::handle_remote_state_change()
 {
   if (!_remote_state_change.pending())
-    return;
+    return Reschedule::No;
 
   Mword add, del;
     {
@@ -1465,7 +1534,9 @@ Context::handle_remote_state_change()
       _remote_state_change.del = 0;
     }
 
+  Reschedule need_resched = handle_remote_state_change_pi_resched(&add);
   state_change_dirty(~del, add);
+  return need_resched;
 }
 
 /**
@@ -2049,7 +2120,7 @@ Context::Pending_rqq::handle_requests(Context **mq)
 
       assert(c->check_for_current_cpu());
 
-      c->handle_remote_state_change();
+      resched |= c->handle_remote_state_change();
       if (c->_migration != nullptr) [[unlikely]]
         {
           // if the currently executing thread shall be migrated we must defer
@@ -2413,6 +2484,192 @@ Context::leave_tickless_idle(Cpu_number cpu = current_cpu())
       Mem_space::enable_tlb(cpu);
       Mem_space::reload_current();
       Rcu::leave_idle(cpu);
+    }
+}
+
+//----------------------------------------------------------------------------
+IMPLEMENTATION [!prio_inherit]:
+
+PRIVATE inline
+Reschedule
+Context::handle_remote_state_change_pi_resched(Mword *)
+{
+  return Reschedule::No;
+}
+
+PROTECTED inline
+void
+Context::release_owned_pi_mutexes()
+{}
+
+//----------------------------------------------------------------------------
+IMPLEMENTATION [prio_inherit]:
+
+PRIVATE inline
+Reschedule
+Context::handle_remote_state_change_pi_resched(Mword *add)
+{
+  if (*add & Thread_pi_resched) [[unlikely]]
+    {
+      *add &= ~Thread_pi_resched;
+
+      // Do we need to acquire lock here when accessing pi_effective_prio() to
+      // ensure it is up to date?
+      // I don't think so, having acquire _remote_state_change.lock in
+      // handle_remote_state_change() should be sufficient, since whenever
+      // someone else changes our prio, they need to call xcpu_pi_update_prio().
+      // For that they take that lock, thus making the changed prio visible to us.
+      ready_queue_update_prio(pi_effective_prio());
+      return Reschedule::when(dominates_current());
+    }
+
+  return Reschedule::No;
+}
+
+PUBLIC inline
+void
+Context::ready_queue_update_prio(unsigned short prio)
+{
+  // Must only be done on home CPU or in DRQ context of thread.
+  assert(home_cpu() == current_cpu() || !Cpu::online(home_cpu()));
+  // Currently always the case (the multi sched context feature is inactive).
+  assert(sched() == sched_context());
+
+  Sched_context *sched = sched_context();
+  if (!sched->in_ready_list()) [[unlikely]]
+    {
+      sched->set_prio(prio);
+      return;
+    }
+
+  auto &rq = Sched_context::rq.cpu(home_cpu());
+  rq.ready_dequeue(sched);
+  sched->set_prio(prio);
+  // NOTE: Always enqueues to the front.
+  rq.ready_enqueue(sched);
+}
+
+/**
+ * Check whether this context dominates the scheduling context currently
+ * executing on the current CPU.
+ *
+ * \note Derived from Sched_context::Ready_queue::deblock.
+ */
+PUBLIC inline
+bool
+Context::dominates_current()
+{
+  Cpu_number const cpu = current_cpu();
+  if (access_once(&_home_cpu) != cpu) [[likely]]
+    return false;
+
+  auto &rq = Sched_context::rq.current();
+  Sched_context *sc = sched_context();
+  Sched_context *cs = rq.current_sched();
+  Sched_context *crs = current()->sched();
+
+  if (sc == cs)
+    return !crs || sc->dominates(crs);
+
+  return (!cs || sc->dominates(cs)) && (!crs || sc->dominates(crs));
+}
+
+/**
+ * Update the ready queue with new effective PI priority of the thread.
+ *
+ * \param prio        Effective priority, read while holding _pi_chain_lock.
+                      Only used if context's home CPU is the current CPU.
+ * \param make_ready  Transition context from Thread_pi_mutex_wait to Thread_ready.
+ *
+ * \returns True if a reschedule is necessary (a de-blocked or re-prioritized
+ *          scheduling context can preempt the currently running scheduling
+ *          context).
+ *
+ * \note This function is a preemption point if make_ready=true.
+ *
+ * This function must be used to update the prio of contexts that are
+ * potentially running on a different CPU.
+ *
+ * The invariant ensuring that the effective PI priority is always up-to-date,
+ * even though xcpu_pi_update_prio() is invoked without holding the
+ * _pi_chain_lock:
+ *   - If home CPU is current CPU, there must be no preemption between reading
+ *     the effective prio (under _pi_chain_lock) and invoking
+ *     xcpu_pi_update_prio(). This ensures that the xcpu_pi_update_prio() call
+ *     following a concurrent update of the context's effective prio from a
+ *     remote CPU is guaranteed to be applied only AFTER our call.
+ *   - If home CPU is a remote CPU, then the _remote_state_change.lock ensures
+ *     that the updated effective prio is observable in
+ *     `Context::handle_remote_state_change()`.
+ */
+PUBLIC inline NEEDS[Context::pending_rqq_enqueue, "thread_state.h"]
+Reschedule
+Context::xcpu_pi_update_prio(unsigned short prio, bool make_ready = false)
+{
+  Cpu_number current_cpu = ::current_cpu();
+  if (access_once(&_home_cpu) != current_cpu) [[unlikely]]
+    {
+      auto guard = lock_guard(_remote_state_change.lock);
+      if (access_once(&_home_cpu) != current_cpu) [[likely]]
+        {
+          Mword add = Thread_pi_resched;
+          Mword del = 0;
+          if (make_ready)
+            {
+              add |= Thread_ready;
+              del |= Thread_pi_mutex_wait;
+            }
+          _remote_state_change.add |= add;
+          _remote_state_change.del = (_remote_state_change.del & ~add) | del;
+          guard.reset();
+          pending_rqq_enqueue();
+          return Reschedule::No;
+        }
+    }
+
+  ready_queue_update_prio(prio);
+
+  if (make_ready)
+    {
+      state_change_dirty(~Thread_pi_mutex_wait, Thread_ready);
+      return Sched_context::rq.current().deblock(sched(), current()->sched(),
+                                                 false);
+    }
+  else
+    return Reschedule::when(dominates_current());
+}
+
+/**
+ * Release mutexes owned by a thread when the thread gets killed.
+ *
+ * \pre `cpu_lock` must be held.
+ *
+ * \note This function is a preemption point.
+ */
+PROTECTED
+void
+Context::release_owned_pi_mutexes()
+{
+  for (;;)
+    {
+      Pi_mutex_iface *pi_mutex;
+        {
+          auto g = lock_guard(_pi_owned_mutexes.lock());
+          Prio_list_elem *elem = _pi_owned_mutexes.first();
+          if (!elem)
+            return;
+
+          pi_mutex = static_cast<Pi_mutex_iface *>(elem);
+        }
+
+      // Actually removing the mutexes is done under _pi_chain_lock. This works
+      // because once we see a Pi_mutex in our owned_mutexes list, we as the
+      // owner are the only one that can release it. So we know that a mutex
+      // will never vanish, only new ones can appear, due to someone declaring
+      // us as fast path owner.
+      pi_mutex->release_owner_on_kill(this);
+
+      Proc::preemption_point();
     }
 }
 

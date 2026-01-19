@@ -461,7 +461,8 @@ public:
     Label_debugger = -23L,     ///< Protocol ID for the debugger
     Label_smc = -24L,          ///< Protocol ID for ARM SMC calls.
     Label_vcpu_context = -25L, ///< Protocol ID for hardware vCPU contexts.
-    Max_factory_label = Label_vcpu_context,
+    Label_pi_mutex = -26L,     ///< Protocol ID for priority inheritance mutex
+    Max_factory_label = Label_pi_mutex,
   };
 private:
   Mword _tag;
