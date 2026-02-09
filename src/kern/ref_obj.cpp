@@ -76,6 +76,16 @@ public:
     return *this;
   }
 
+  /**
+   * Create Ref_ptr for a reference that was acquired manually via inc_ref().
+   */
+  static Ref_ptr from_counted_ref(T* p)
+  {
+    Ref_ptr ptr;
+    ptr._o = p;
+    return ptr;
+  }
+
   T *operator -> () const { return get(); }
 
   explicit operator bool () const { return _o != nullptr; }
