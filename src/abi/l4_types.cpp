@@ -587,6 +587,7 @@ public:
     EOk           =  0,
     EPerm         =  1, ///< Permission denied.
     ENoent        =  2, ///< Some object was not found.
+    EAgain        = 11, ///< Try again.
     ENomem        = 12, ///< Out of memory.
     EFault        = 14, ///< There was an unresolved page fault
     EBusy         = 16, ///< The object is busy, try again.
@@ -594,6 +595,7 @@ public:
     ENodev        = 19, ///< Objects of the specified type cannot be created.
     EInval        = 22, ///< Invalid parameters passed.
     ERange        = 34, ///< Parameter out of range
+    EDeadlk       = 35, ///< Deadlock would occur.
     ENosys        = 38, ///< No such operation.
     EBadproto     = 39, ///< Protocol not supported by object.
 
