@@ -822,6 +822,7 @@ sub parse_file
 		    (?:enum|struct|class)
 		    (?:$s $attribute_spec)?
 		    $s ($identifier (?:$s $template_arg)?)
+		    $s (?:final)?
 		    $s (?::(?!:)|\{)/sx)
 		{
 		  # Have a block -> this is a definition.
