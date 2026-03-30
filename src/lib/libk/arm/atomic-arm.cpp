@@ -51,14 +51,14 @@ IMPLEMENTATION [arm && arm_v6plus]:
 inline
 bool
 local_cas_unsafe(Mword *ptr, Mword oldval, Mword newval)
-{ return cas_arch(ptr, oldval, newval); }
+{ return cas_arch_relaxed(ptr, oldval, newval); }
 
 inline
 void
 local_atomic_or(Mword *mem, Mword value)
-{ atomic_or(mem, value); }
+{ atomic_or_relaxed(mem, value); }
 
 inline
 void
 local_atomic_and(Mword *mem, Mword value)
-{ atomic_and(mem, value); }
+{ atomic_and_relaxed(mem, value); }

@@ -69,6 +69,236 @@ local_atomic_change(T *ptr, T mask, T bits)
   return old;
 }
 
+/**
+ * Atomically load a value from the given memory location.
+ *
+ * Performs the load operation using sequentially consistent memory order,
+ * providing the strongest possible guarantees as a safe default choice.
+ *
+ * If required, use one of the variants that explicitly specify the
+ * memory order: relaxed, consume, acquire, or seq_cst
+ *
+ * \note The difference between an atomic_load_acquire and an
+ *       atomic_load_seq_cst is quite subtle. They both provide the same
+ *       visibility guarantees, but the atomic_load_seq_cst in addition provides
+ *       the global ordering constraint with other sequentially consistent
+ *       atomic operations (does not affect regular non-atomic memory accesses).
+ *
+ * \param mem  Pointer to the memory location to operate on.
+ * \return     The atomically read value.
+ */
+template<typename T> inline
+T
+atomic_load(T const *mem)
+{ return atomic_load_seq_cst<T>(mem); }
+
+/**
+ * Atomically store a value to the given memory location.
+ *
+ * Performs the store operation using sequentially consistent memory order,
+ * providing the strongest possible guarantees as a safe default choice.
+ *
+ * If required, use one of the variants that explicitly specify the
+ * memory order: relaxed, release, or seq_cst
+ *
+ * \param mem    Pointer to the memory location to operate on.
+ * \param value  The value to store.
+ */
+template<typename T, typename V> inline
+void
+atomic_store(T *mem, V value)
+{ atomic_store_seq_cst<T, V>(mem, value); }
+
+/**
+ * Atomically bitwise "and" a value to the given memory location.
+ *
+ * Performs the operation using sequentially consistent memory order,
+ * providing the strongest possible guarantees as a safe default choice.
+ *
+ * If required, use one of the variants that explicitly specify the
+ * memory order: relaxed, acquire, release, acq_rel or seq_cst
+ *
+ * \note The difference between an atomic_store_release and an
+ *       atomic_store_seq_cst is quite subtle. They both provide the same
+ *       visibility guarantees, but the atomic_store_seq_cst in addition provides
+ *       the global ordering constraint with other sequentially consistent
+ *       atomic operations (does not affect regular non-atomic memory accesses).
+ *
+ * \param mem    Pointer to the memory location to operate on.
+ * \param value  The value to bitwise "and".
+ */
+template<typename T, typename V> inline
+void
+atomic_and(T *mem, V value)
+{ return atomic_and_seq_cst(mem, value); }
+
+/**
+ * Atomically bitwise "or" a value to the given memory location.
+ *
+ * Performs the operation using sequentially consistent memory order,
+ * providing the strongest possible guarantees as a safe default choice.
+ *
+ * If required, use one of the variants that explicitly specify the
+ * memory order: relaxed, acquire, release, acq_rel or seq_cst
+ *
+ * \param mem    Pointer to the memory location to operate on.
+ * \param value  The value to bitwise "or".
+ */
+template<typename T, typename V> inline
+void
+atomic_or(T *mem, V value)
+{ return atomic_or_seq_cst(mem, value); }
+
+/**
+ * Atomically "add" a value to the given memory location.
+ *
+ * Performs the operation using sequentially consistent memory order,
+ * providing the strongest possible guarantees as a safe default choice.
+ *
+ * If required, use one of the variants that explicitly specify the
+ * memory order: relaxed, acquire, release, acq_rel or seq_cst
+ *
+ * \param mem    Pointer to the memory location to operate on.
+ * \param value  The value to "add".
+ */
+template<typename T, typename V> inline
+void
+atomic_add(T *mem, V value)
+{ return atomic_add_seq_cst(mem, value); }
+
+/**
+ * Atomically bitwise "and" a value to the given memory location and return the
+ * original value stored at that location.
+ *
+ * Performs the operation using sequentially consistent memory order,
+ * providing the strongest possible guarantees as a safe default choice.
+ *
+ * If required, use one of the variants that explicitly specify the
+ * memory order: relaxed, acquire, release, acq_rel or seq_cst
+ *
+ * \param mem    Pointer to the memory location to operate on.
+ * \param value  The value to "and".
+ * \return       The original value stored at the memory location.
+ */
+template<typename T, typename V> inline
+T
+atomic_fetch_and(T *mem, V value)
+{ return atomic_fetch_and_seq_cst(mem, value); }
+
+/**
+ * Atomically bitwise "or" a value to the given memory location and return the
+ * original value stored at that location.
+ *
+ * Performs the operation using sequentially consistent memory order,
+ * providing the strongest possible guarantees as a safe default choice.
+ *
+ * If required, use one of the variants that explicitly specify the
+ * memory order: relaxed, acquire, release, acq_rel or seq_cst
+ *
+ * \param mem    Pointer to the memory location to operate on.
+ * \param value  The value to "or".
+ * \return       The original value stored at the memory location.
+ */
+template<typename T, typename V> inline
+T
+atomic_fetch_or(T *mem, V value)
+{ return atomic_fetch_or_seq_cst(mem, value); }
+
+/**
+ * Atomically "add" a value to the given memory location and return the
+ * original value stored at that location.
+ *
+ * Performs the operation using sequentially consistent memory order,
+ * providing the strongest possible guarantees as a safe default choice.
+ *
+ * If required, use one of the variants that explicitly specify the
+ * memory order: relaxed, acquire, release, acq_rel or seq_cst
+ *
+ * \param mem    Pointer to the memory location to operate on.
+ * \param value  The value to "add".
+ * \return       The original value stored at the memory location.
+ */
+template<typename T, typename V> inline
+T
+atomic_fetch_add(T *mem, V value)
+{ return atomic_fetch_add_seq_cst(mem, value); }
+
+/**
+ * Atomically bitwise "and" a value to the given memory location and return the
+ * resulting value.
+ *
+ * Performs the operation using sequentially consistent memory order,
+ * providing the strongest possible guarantees as a safe default choice.
+ *
+ * If required, use one of the variants that explicitly specify the
+ * memory order: relaxed, acquire, release, acq_rel or seq_cst
+ *
+ * \param mem    Pointer to the memory location to operate on.
+ * \param value  The value to "and".
+ * \return       The resulting value.
+ */
+template<typename T, typename V> inline
+T
+atomic_and_fetch(T *mem, V value)
+{ return atomic_and_fetch_seq_cst(mem, value); }
+
+/**
+ * Atomically bitwise "or" a value to the given memory location and return the
+ * resulting value.
+ *
+ * Performs the operation using sequentially consistent memory order,
+ * providing the strongest possible guarantees as a safe default choice.
+ *
+ * If required, use one of the variants that explicitly specify the
+ * memory order: relaxed, acquire, release, acq_rel or seq_cst
+ *
+ * \param mem    Pointer to the memory location to operate on.
+ * \param value  The value to "or".
+ * \return       The resulting value.
+ */
+template<typename T, typename V> inline
+T
+atomic_or_fetch(T *mem, V value)
+{ return atomic_or_fetch_seq_cst(mem, value); }
+
+/**
+ * Atomically "add" a value to the given memory location and return the
+ * resulting value.
+ *
+ * Performs the operation using sequentially consistent memory order,
+ * providing the strongest possible guarantees as a safe default choice.
+ *
+ * If required, use one of the variants that explicitly specify the
+ * memory order: relaxed, acquire, release, acq_rel or seq_cst
+ *
+ * \param mem    Pointer to the memory location to operate on.
+ * \param value  The value to "add".
+ * \return       The resulting value.
+ */
+template<typename T, typename V> inline
+T
+atomic_add_fetch(T *mem, V value)
+{ return atomic_add_fetch_seq_cst(mem, value); }
+
+/**
+ * Atomically exchange the value stored at given memory location with a given
+ * value and return the original value stored at the location.
+ *
+ * Performs the operation using sequentially consistent memory order,
+ * providing the strongest possible guarantees as a safe default choice.
+ *
+ * If required, use one of the variants that explicitly specify the
+ * memory order: relaxed, acquire, release, acq_rel or seq_cst
+ *
+ * \param mem    Pointer to the memory location to operate on.
+ * \param value  The new value to store.
+ * \return       The original value.
+ */
+template<typename T, typename V> inline
+T
+atomic_exchange(T *mem, V value)
+{ return atomic_exchange_seq_cst(mem, value); }
+
 //---------------------------------------------------------------------------
 IMPLEMENTATION [!mp]:
 
@@ -94,9 +324,12 @@ IMPLEMENTATION [mp]:
  * Atomically test and modify memory with protection against concurrent writes
  * from other CPUs (SMP-safe).
  *
- * \note The implementation guarantees that the compiler knows that the memory
- *       is clobbered, even if this was caused by a concurrent write from
- *       another CPU.
+ * Performs the operation using sequentially consistent memory order on success,
+ * providing the strongest possible guarantees as a safe default choice.
+ * On failure no memory order is enforced (relaxed).
+ *
+ * If required, use one of the variants that explicitly specify the
+ * memory order: relaxed, acquire, release, acq_rel or seq_cst
  *
  * \param ptr     Pointer to the memory to change.
  * \param oldval  Only write 'newval' if the memory contains this value.
@@ -110,11 +343,11 @@ cas(T *ptr, T oldval, T newval)
   static_assert(sizeof(T) == sizeof(Mword));
 
   if constexpr (cxx::is_pointer_v<T>)
-    return cas_arch(reinterpret_cast<Mword*>(ptr),
-                    reinterpret_cast<Mword>(oldval),
-                    reinterpret_cast<Mword>(newval));
+    return cas_arch_seq_cst(reinterpret_cast<Mword*>(ptr),
+                            reinterpret_cast<Mword>(oldval),
+                            reinterpret_cast<Mword>(newval));
   else
-    return cas_arch(reinterpret_cast<Mword*>(ptr),
-                    static_cast<Mword>(oldval),
-                    static_cast<Mword>(newval));
+    return cas_arch_seq_cst(reinterpret_cast<Mword*>(ptr),
+                            static_cast<Mword>(oldval),
+                            static_cast<Mword>(newval));
 }

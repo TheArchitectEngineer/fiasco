@@ -1,24 +1,85 @@
 INTERFACE [riscv]:
 
+#include "asm_riscv.h"
+
 // preprocess off
-#define ATOMIC_OP_(op, size, suffix)                                           \
+#define ATOMIC_LOAD_OP_(size, suffix, order_name, pre_fence, post_fence, cl)   \
+  template<typename T> requires(sizeof(T) == size) inline                      \
+  T                                                                            \
+  atomic_load##order_name(T const *mem)                                        \
+  {                                                                            \
+    T res;                                                                     \
+    asm volatile (                                                             \
+        pre_fence " \n"                                                        \
+        "l"#suffix " %[res], %[mem] \n"                                        \
+        post_fence " \n"                                                       \
+        : [res] "=r" (res)                                                     \
+        : [mem] "m"(*mem)                                                      \
+        : cl);                                                                 \
+    return res;                                                                \
+  }
+
+#define ATOMIC_LOAD_OP(order_name, pre_fence, post_fence, cl)                  \
+  ATOMIC_LOAD_OP_(4, w, order_name, pre_fence, post_fence, cl)                 \
+  ATOMIC_LOAD_OP_(8, d, order_name, pre_fence, post_fence, cl)
+ATOMIC_LOAD_OP(_relaxed,               ,              ,         )
+ATOMIC_LOAD_OP(_acquire,               , "fence r, rw", "memory")
+ATOMIC_LOAD_OP(_seq_cst, "fence rw, rw", "fence r, rw", "memory")
+#undef ATOMIC_LOAD_OP_
+#undef ATOMIC_LOAD_OP
+
+
+#define ATOMIC_STORE_OP_(size, suffix, order_name, pre_fence, post_fence, cl)  \
+  template<typename T, typename V> requires(sizeof(T) == size) inline          \
+  void                                                                         \
+  atomic_store##order_name(T *mem, V value)                                    \
+  {                                                                            \
+    T val = value;                                                             \
+    asm volatile (                                                             \
+        pre_fence " \n"                                                        \
+        "s"#suffix " %[val], %[mem] \n"                                        \
+        post_fence " \n"                                                       \
+        : [mem] "=m" (*mem)                                                    \
+        : [val] "r" (val)                                                      \
+        : cl);                                                                 \
+  }
+
+#define ATOMIC_STORE_OP(order_name, pre_fence, post_fence, cl)                 \
+  ATOMIC_STORE_OP_(4, w, order_name, pre_fence, post_fence, cl)                \
+  ATOMIC_STORE_OP_(8, d, order_name, pre_fence, post_fence, cl)
+ATOMIC_STORE_OP(_relaxed,              ,               ,         )
+ATOMIC_STORE_OP(_release, "fence rw, w",               , "memory")
+ATOMIC_STORE_OP(_seq_cst, "fence rw, w", "fence rw, rw", "memory")
+#undef ATOMIC_STORE_OP_
+#undef ATOMIC_STORE_OP
+
+
+#define ATOMIC_VARIANTS(OP_MACRO, ...)                                         \
+  OP_MACRO(__VA_ARGS__, _relaxed,      ,         )                             \
+  OP_MACRO(__VA_ARGS__, _acquire, .aq  , "memory")                             \
+  OP_MACRO(__VA_ARGS__, _release, .rl  , "memory")                             \
+  OP_MACRO(__VA_ARGS__, _acq_rel, .aqrl, "memory")                             \
+  OP_MACRO(__VA_ARGS__, _seq_cst, .aqrl, "memory")
+
+#define ATOMIC_OP_(op, size, suffix, order_name, order, cl)                    \
   template<typename T, typename V>                                             \
   requires(sizeof(T) == size) inline                                           \
   void                                                                         \
-  atomic_##op(T *mem, V value)                                                 \
+  atomic_##op##order_name(T *mem, V value)                                     \
   {                                                                            \
     T val = value;                                                             \
     T prev;                                                                    \
                                                                                \
     asm volatile (                                                             \
-      "amo" #op "." #suffix " %[prev], %[mask], %[mem]"                        \
+      "amo" #op "." #suffix #order " %[prev], %[mask], %[mem]"                 \
       : [prev]"=r" (prev), [mem]"+A"(*mem)                                     \
       : [mask]"r" (val)                                                        \
-      : "memory");                                                             \
+      : cl);                                                                   \
   }
-#define ATOMIC_OP(op)  \
-  ATOMIC_OP_(op, 4, w) \
-  ATOMIC_OP_(op, 8, d)
+
+#define ATOMIC_OP(op)                                                          \
+  ATOMIC_VARIANTS(ATOMIC_OP_, op, 4, w)                                        \
+  ATOMIC_VARIANTS(ATOMIC_OP_, op, 8, d)
 
 ATOMIC_OP(or)
 ATOMIC_OP(and)
@@ -27,26 +88,26 @@ ATOMIC_OP(add)
 #undef ATOMIC_OP
 
 
-#define ATOMIC_FETCH_OP_(name, op, size, suffix)                               \
+#define ATOMIC_FETCH_OP_(name, op, size, suffix, order_name, order, cl)        \
   template<typename T, typename V>                                             \
   requires(sizeof(T) == size) inline                                           \
   T                                                                            \
-  atomic_##name(T *mem, V value)                                               \
+  atomic_##name##order_name(T *mem, V value)                                   \
   {                                                                            \
     T val = value;                                                             \
     T prev;                                                                    \
                                                                                \
     asm volatile (                                                             \
-      "amo" #op "." #suffix " %[prev], %[mask], %[mem]"                        \
+      "amo" #op "." #suffix #order " %[prev], %[mask], %[mem]"                 \
       : [prev]"=r" (prev), [mem]"+A"(*mem)                                     \
       : [mask]"r" (val)                                                        \
-      : "memory");                                                             \
+      : cl);                                                                   \
     return prev;                                                               \
   }
 
-#define ATOMIC_FETCH_OP(name, op)  \
-  ATOMIC_FETCH_OP_(name, op, 4, w) \
-  ATOMIC_FETCH_OP_(name, op, 8, d)
+#define ATOMIC_FETCH_OP(name, op)                                              \
+  ATOMIC_VARIANTS(ATOMIC_FETCH_OP_, name, op, 4, w)                            \
+  ATOMIC_VARIANTS(ATOMIC_FETCH_OP_, name, op, 8, d)
 
 ATOMIC_FETCH_OP(fetch_or, or)
 ATOMIC_FETCH_OP(fetch_and, and)
@@ -56,93 +117,89 @@ ATOMIC_FETCH_OP(exchange, swap)
 #undef ATOMIC_FETCH_OP
 
 
-#define ATOMIC_OP_FETCH_(op, size, suffix)                                     \
+#define ATOMIC_OP_FETCH_(op, size, suffix, order_name, order, cl)              \
   template<typename T, typename V>                                             \
   requires(sizeof(T) == size) inline                                           \
   T                                                                            \
-  atomic_##op##_fetch(T *mem, V value)                                         \
+  atomic_##op##_fetch##order_name(T *mem, V value)                             \
   {                                                                            \
     T val = value;                                                             \
     T res;                                                                     \
                                                                                \
     asm volatile (                                                             \
-      "amo" #op "." #suffix " %[res], %[val], %[mem] \n"                       \
+      "amo" #op "." #suffix #order " %[res], %[val], %[mem] \n"                \
       #op "         %[res], %[res], %[val] \n"                                 \
       : [res]"=&r" (res), [mem]"+A"(*mem)                                      \
       : [val]"r" (val)                                                         \
-      : "memory");                                                             \
+      : cl);                                                                   \
     return res;                                                                \
   }
 
-#define ATOMIC_OP_FETCH(op)  \
-  ATOMIC_OP_FETCH_(op, 4, w) \
-  ATOMIC_OP_FETCH_(op, 8, d)
+#define ATOMIC_OP_FETCH(op)                                                    \
+  ATOMIC_VARIANTS(ATOMIC_OP_FETCH_, op, 4, w)                                  \
+  ATOMIC_VARIANTS(ATOMIC_OP_FETCH_, op, 8, d)
 
 ATOMIC_OP_FETCH(or)
 ATOMIC_OP_FETCH(and)
 ATOMIC_OP_FETCH(add)
 #undef ATOMIC_OP_FETCH_
 #undef ATOMIC_OP_FETCH
+#undef ATOMIC_VARIANTS
+
+
+#define ATOMIC_CAS_OP(order_name, ol, os, cl)                                  \
+  inline                                                                       \
+  bool                                                                         \
+  cas_arch##order_name(Mword *ptr, Mword oldval, Mword newval)                 \
+  {                                                                            \
+    Mword prev;                                                                \
+    /* Holds return value of SC instruction: 0 if successful, !0 otherwise */  \
+    Mword ret = 1;                                                             \
+                                                                               \
+    asm volatile (                                                             \
+      "0:                                     \n"                              \
+      REG_LR #ol " %[prev], %[ptr]            \n"                              \
+      "bne         %[prev], %[oldval], 1f     \n"                              \
+      REG_SC #os " %[ret],  %[newval], %[ptr] \n"                              \
+      "bnez        %[ret],  0b                \n"                              \
+      "1:                                     \n"                              \
+      : [prev]"=&r" (prev), [ret]"+&r" (ret), [ptr]"+A" (*ptr)                 \
+      : [newval]"r" (newval), [oldval]"r" (oldval)                             \
+      : cl);                                                                   \
+                                                                               \
+    return ret == 0;                                                           \
+  }
+
+ATOMIC_CAS_OP(_relaxed,      ,    ,         )
+ATOMIC_CAS_OP(_acquire, .aq  ,    , "memory")
+ATOMIC_CAS_OP(_release,      , .rl, "memory")
+ATOMIC_CAS_OP(_acq_rel, .aq  , .rl, "memory")
+ATOMIC_CAS_OP(_seq_cst, .aqrl, .rl, "memory")
+#undef ATOMIC_CAS_OP
 // preprocess on
 
 //----------------------------------------------------------------------------
 IMPLEMENTATION [riscv]:
 
-#include "asm_riscv.h"
-
-template<typename T> requires(sizeof(T) == 4) inline
-T
-atomic_load(T const *mem)
-{
-  T res;
-  asm volatile ("lw %0, %1" : "=r" (res) : "m"(*mem));
-  return res;
-}
-
-template<typename T> requires(sizeof(T) == 8) inline
-T
-atomic_load(T const *mem)
-{
-  T res;
-  asm volatile ("ld %0, %1" : "=r" (res) : "m"(*mem));
-  return res;
-}
-
-template<typename T, typename V> requires(sizeof(T) == 4) inline
-void
-atomic_store(T *mem, V value)
-{
-  T val = value;
-  asm volatile ("sw %1, %0" : "=m" (*mem) : "r" (val));
-}
-
-template<typename T, typename V> requires(sizeof(T) == 8) inline
-void
-atomic_store(T *mem, V value)
-{
-  T val = value;
-  asm volatile ("sd %1, %0" : "=m" (*mem) : "r" (val));
-}
-
 inline
 void
 local_atomic_and(Mword *mem, Mword value)
 {
-  atomic_and(mem, value);
+  atomic_and_relaxed(mem, value);
 }
 
 inline
 void
 local_atomic_or(Mword *mem, Mword value)
 {
-  atomic_or(mem, value);
+  atomic_or_relaxed(mem, value);
 }
 
 inline
 void
 local_atomic_add(Mword *mem, Mword value)
 {
-  atomic_add(mem, value);
+  atomic_add_relaxed(mem, value);
 }
 
 // ``unsafe'' stands for no safety according to the size of the given type.
@@ -150,67 +207,9 @@ local_atomic_add(Mword *mem, Mword value)
 // independent part of atomic that use the unsafe versions and make a type
 // check.
 
-inline NEEDS["asm_riscv.h"]
+inline
 bool
 local_cas_unsafe(Mword *ptr, Mword oldval, Mword newval)
 {
-  Mword prev;
-  // Holds return value of SC instruction: 0 if successful, !0 otherwise
-  Mword ret = 1;
-
-  asm volatile (
-    "0:                               \n"
-    REG_LR " %[prev], %[ptr]          \n"
-    "bne     %[prev], %[old], 1f      \n"
-    REG_SC " %[ret],  %[newv], %[ptr] \n"
-    "bnez    %[ret],  0b              \n"
-    "1:                               \n"
-    : [prev]"=&r" (prev), [ret]"+&r" (ret), [ptr]"+A"(*ptr)
-    : [newv]"r" (newval), [old]"r" (oldval)
-    : "memory");
-
-  return ret == 0;
-}
-
-//---------------------------------------------------------------------------
-IMPLEMENTATION [riscv && mp]:
-
-inline NEEDS["asm_riscv.h"]
-bool
-cas_arch(Mword *ptr, Mword oldval, Mword newval)
-{
-  Mword prev;
-  // Holds return value of SC instruction: 0 if successful, !0 otherwise
-  Mword ret = 1;
-
-  /*
-    Other harts shall observe LR-SC retries in the same order they were
-    executed. Therefore we need release semantics on SC here.
-
-    An SC instruction can never be observed by another RISC-V hart before the
-    immediately preceding LR. Therefore no acquire semantics on LR are needed.
-  */
-  asm volatile (
-    "0:                                  \n"
-    REG_LR "    %[prev], %[ptr]          \n"
-    "bne        %[prev], %[old], 1f      \n"
-    REG_SC ".rl %[ret],  %[newv], %[ptr] \n"
-    "bnez       %[ret],  0b              \n"
-    "fence      rw, rw                   \n"
-    "1:                                  \n"
-    : [prev]"=&r" (prev), [ret]"+&r" (ret), [ptr]"+A"(*ptr)
-    : [newv]"r" (newval), [old]"r" (oldval)
-    : "memory");
-
-  return ret == 0;
-}
-
-//---------------------------------------------------------------------------
-IMPLEMENTATION [riscv && !mp]:
-
-inline
-bool
-cas_arch(Mword *m, Mword o, Mword n)
-{
-  return local_cas_unsafe(m, o, n);
+  return cas_arch_relaxed(ptr, oldval, newval);
 }

@@ -1,141 +1,203 @@
-IMPLEMENTATION [ia32]:
+INTERFACE [ia32]:
 
-template<typename T, typename V> inline
+// preprocess off
+#define ATOMIC_VARIANTS(OP_MACRO, ...)                                         \
+  OP_MACRO(__VA_ARGS__ __VA_OPT__(,) _relaxed,         )                       \
+  OP_MACRO(__VA_ARGS__ __VA_OPT__(,) _acquire, "memory")                       \
+  OP_MACRO(__VA_ARGS__ __VA_OPT__(,) _release, "memory")                       \
+  OP_MACRO(__VA_ARGS__ __VA_OPT__(,) _acq_rel, "memory")                       \
+  OP_MACRO(__VA_ARGS__ __VA_OPT__(,) _seq_cst, "memory")
+
+
+#define ATOMIC_OP(op, order_name, cl)                                          \
+  template<typename T, typename V> inline                                      \
+  void                                                                         \
+  atomic_##op##order_name(T *mem, V value)                                     \
+  {                                                                            \
+    static_assert(sizeof(T) == 4);                                             \
+    T val = value;                                                             \
+    asm volatile ("lock; " #op"l %1, %2"                                       \
+                  : "=m"(*mem)                                                 \
+                  : "ir"(val), "m"(*mem)                                       \
+                  : cl);                                                       \
+  }
+ATOMIC_VARIANTS(ATOMIC_OP, or)
+ATOMIC_VARIANTS(ATOMIC_OP, and)
+ATOMIC_VARIANTS(ATOMIC_OP, add)
+#undef ATOMIC_OP
+
+
+#define ATOMIC_CAS_OP(order_name, cl)                                          \
+  inline ALWAYS_INLINE                                                         \
+  bool                                                                         \
+  cas_arch##order_name(Mword *ptr, Mword cmpval, Mword newval)                 \
+  {                                                                            \
+    Mword oldval_ignore, zflag;                                                \
+    asm volatile ("lock; cmpxchgl %[newval], %[ptr]"                           \
+                  : "=a"(oldval_ignore), "=@ccz"(zflag)                        \
+                  : [newval]"r"(newval), [ptr]"m"(*ptr), "a"(cmpval)           \
+                  : cl);                                                       \
+    return zflag;                                                              \
+  }
+ATOMIC_VARIANTS(ATOMIC_CAS_OP)
+#undef ATOMIC_CAS_OP
+
+
+#define ATOMIC_OP(op, cop, order_name, cl)                                     \
+  template<typename T, typename V> inline                                      \
+  T                                                                            \
+  atomic_fetch_##op##order_name(T *mem, V value)                               \
+  {                                                                            \
+    static_assert(sizeof(T) == sizeof(Mword));                                 \
+    T val = value;                                                             \
+    T old;                                                                     \
+    do                                                                         \
+      {                                                                        \
+        old = *mem;                                                            \
+      }                                                                        \
+    while (!cas_arch##order_name(reinterpret_cast<Mword *>(mem),               \
+                                 static_cast<Mword>(old),                      \
+                                 static_cast<Mword>(old cop val)));            \
+    return old;                                                                \
+  }                                                                            \
+                                                                               \
+  template<typename T, typename V> inline                                      \
+  T                                                                            \
+  atomic_##op##_fetch##order_name(T *mem, V value)                             \
+  {                                                                            \
+    static_assert(sizeof(T) == sizeof(Mword));                                 \
+    T val = value;                                                             \
+    T old;                                                                     \
+    do                                                                         \
+      {                                                                        \
+        old = *mem;                                                            \
+      }                                                                        \
+    while (!cas_arch##order_name(reinterpret_cast<Mword *>(mem),               \
+                                 static_cast<Mword>(old),                      \
+                                 static_cast<Mword>(old cop val)));            \
+    return old cop val;                                                        \
+  }
+ATOMIC_VARIANTS(ATOMIC_OP, and, &)
+ATOMIC_VARIANTS(ATOMIC_OP, or, |)
+#undef ATOMIC_OP
+
+
+#define ATOMIC_ADD_OP(order_name, cl)                                          \
+  template<typename T, typename V>                                             \
+  requires(sizeof(T) == 4) inline                                              \
+  T                                                                            \
+  atomic_fetch_add##order_name(T *mem, V value)                                \
+  {                                                                            \
+    T val = value;                                                             \
+    T old;                                                                     \
+    asm volatile ("lock; xadd %1, %0"                                          \
+                  : "+m"(*mem), "=r"(old)                                      \
+                  : "1"(val)                                                   \
+                  : cl);                                                       \
+    return old;                                                                \
+  }                                                                            \
+                                                                               \
+  template<typename T, typename V>                                             \
+  requires(sizeof(T) == 4) inline                                              \
+  T                                                                            \
+  atomic_add_fetch##order_name(T *mem, V value)                                \
+  {                                                                            \
+    T val = value;                                                             \
+    T old;                                                                     \
+    asm volatile ("lock; xadd %1, %0"                                          \
+                  : "+m"(*mem), "=r"(old)                                      \
+                  : "1"(val)                                                   \
+                  : cl);                                                       \
+    return old + val;                                                          \
+  }
+ATOMIC_VARIANTS(ATOMIC_ADD_OP)
+#undef ATOMIC_ADD_OP
+
+
+#define ATOMIC_EXCHANGE_OP(order_name, cl)                                     \
+  template<typename T, typename V> inline                                      \
+  T                                                                            \
+  atomic_exchange##order_name(T *mem, V value)                                 \
+  {                                                                            \
+    static_assert(sizeof(T) == 4);                                             \
+    T val = value;                                                             \
+                                                                               \
+    /* processor locking even without explicit LOCK prefix */                  \
+    asm volatile ("xchg %[val], %[mem]\n"                                      \
+                  : [val] "=r"(val), [mem] "+m"(*mem)                          \
+                  : "0"(val)                                                   \
+                  : cl);                                                       \
+                                                                               \
+    return val;                                                                \
+  }
+ATOMIC_VARIANTS(ATOMIC_EXCHANGE_OP)
+#undef ATOMIC_EXCHANGE_OP
+
+template<typename T> inline
 T
-atomic_exchange(T *mem, V value)
-{
-  T val = value;
-
-  // processor locking even without explicit LOCK prefix
-  asm volatile ("xchg %[val], %[mem]\n"
-                : [val] "=r" (val), [mem] "+m" (*mem) : "0" (val));
-
-  return val;
-}
-
-template<typename T, typename V> inline
-void
-atomic_and(T *mem, V value)
-{
-  static_assert(sizeof(T) == 4);
-  T val = value;
-  asm volatile ("lock; andl %1, %2" : "=m"(*mem) : "ir"(val), "m"(*mem));
-}
-
-template<typename T, typename V> inline
-void
-atomic_or(T *mem, V value)
-{
-  static_assert(sizeof(T) == 4);
-  T val = value;
-  asm volatile ("lock; orl %1, %2" : "=m"(*mem) : "ir"(val), "m"(*mem));
-}
-
-template<typename T, typename V> inline
-void
-atomic_add(T *mem, V value)
-{
-  static_assert(sizeof(T) == 4);
-  T val = value;
-  asm volatile ("lock; addl %1, %2" : "=m"(*mem) : "ir"(val), "m"(*mem));
-}
-
-template<typename T, typename V> inline
-T
-atomic_fetch_and(T *mem, V value)
-{
-  T val = value;
-  T old;
-  do
-    {
-      old = *mem;
-    }
-  while (!cas(mem, old, old & val));
-  return old;
-}
-
-template<typename T, typename V> inline
-T
-atomic_and_fetch(T *mem, V value)
-{
-  T val = value;
-  T old;
-  do
-    {
-      old = *mem;
-    }
-  while (!cas(mem, old, old & val));
-  return old & val;
-}
-
-template<typename T, typename V> inline
-T
-atomic_fetch_or(T *mem, V value)
-{
-  T val = value;
-  T old;
-  do
-    {
-      old = *mem;
-    }
-  while (!cas(mem, old, old | val));
-  return old;
-}
-
-template<typename T, typename V> inline
-T
-atomic_or_fetch(T *mem, V value)
-{
-  T val = value;
-  T old;
-  do
-    {
-      old = *mem;
-    }
-  while (!cas(mem, old, old | val));
-  return old | val;
-}
-
-template<typename T, typename V>
-requires(sizeof(T) == 4) inline
-T
-atomic_fetch_add(T *mem, V value)
-{
-  T val = value;
-  T old;
-  asm volatile ("lock; xadd %1, %0" : "+m"(*mem), "=r"(old) : "1"(val));
-  return old;
-}
-
-template<typename T, typename V>
-requires(sizeof(T) == 4) inline
-T
-atomic_add_fetch(T *mem, V value)
-{
-  T val = value;
-  T old;
-  asm volatile ("lock; xadd %1, %0" : "+m"(*mem), "=r"(old) : "1"(val));
-  return old + val;
-}
-
-template< typename T > ALWAYS_INLINE inline
-T
-atomic_load(T const *mem)
+atomic_load_relaxed(T const *mem)
 {
   static_assert(sizeof(T) == 4);
   T res;
-  asm volatile ("movl %[mem], %[res]" : [res] "=r" (res) : [mem] "m" (*mem));
+  asm volatile ("movl %[mem], %[res]"
+                : [res] "=r"(res)
+                : [mem] "m"(*mem));
   return res;
 }
 
-template< typename T, typename V > ALWAYS_INLINE inline
+template<typename T> inline
+T
+atomic_load_seq_cst(T const *mem)
+{
+  static_assert(sizeof(T) == 4);
+  T res;
+  asm volatile ("movl %[mem], %[res]"
+                : [res] "=r"(res)
+                : [mem] "m"(*mem)
+                : "memory");
+  return res;
+}
+
+template<typename T> inline
+T
+atomic_load_acquire(T const *mem)
+{
+  return atomic_load_seq_cst(mem);
+}
+
+template<typename T, typename V> inline
 void
-atomic_store(T *mem, V value)
+atomic_store_relaxed(T *mem, V value)
 {
   static_assert(sizeof(T) == 4);
   T val = value;
-  asm volatile ("movl %[val], %[mem]" : [mem] "=m" (*mem) : [val] "ir" (val));
+  asm volatile ("movl %[val], %[mem]"
+                : [mem] "=m"(*mem)
+                : [val] "ir"(val));
 }
+
+template<typename T, typename V> inline
+void
+atomic_store_release(T *mem, V value)
+{
+  static_assert(sizeof(T) == 4);
+  T val = value;
+  asm volatile ("movl %[val], %[mem]"
+                : [mem] "=m"(*mem)
+                : [val] "ir"(val)
+                : "memory");
+}
+
+template<typename T, typename V> inline
+void
+atomic_store_seq_cst(T *mem, V value)
+{
+  atomic_exchange_seq_cst(mem, value);
+}
+// preprocess on
+
+//----------------------------------------------------------------------------
+IMPLEMENTATION [ia32]:
 
 inline
 void
@@ -170,20 +232,6 @@ local_cas_unsafe(Mword *ptr, Mword cmpval, Mword newval)
   Mword oldval_ignore, zflag;
 
   asm volatile ("cmpxchgl %[newval], %[ptr]"
-                : "=a"(oldval_ignore), "=@ccz"(zflag)
-                : [newval]"r"(newval), [ptr]"m"(*ptr), "a"(cmpval)
-                : "memory");
-
-  return zflag;
-}
-
-inline
-bool
-cas_arch(Mword *ptr, Mword cmpval, Mword newval)
-{
-  Mword oldval_ignore, zflag;
-
-  asm volatile ("lock; cmpxchgl %[newval], %[ptr]"
                 : "=a"(oldval_ignore), "=@ccz"(zflag)
                 : [newval]"r"(newval), [ptr]"m"(*ptr), "a"(cmpval)
                 : "memory");

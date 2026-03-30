@@ -1,13 +1,14 @@
 INTERFACE [mips]:
 
 #include "asm_mips.h"
+#include "mem.h"
 
 // preprocess off
 #define ATOMIC_OP(name, op)                                                    \
   template<typename T, typename V>                                             \
   requires(sizeof(T) == sizeof(Mword)) inline                                  \
   void                                                                         \
-  __f_atomic_##name(T *mem, V value)                                           \
+  atomic_##name##_relaxed(T *mem, V value)                                     \
   {                                                                            \
     T val = value;                                                             \
     Mword tmp;                                                                 \
@@ -27,7 +28,7 @@ INTERFACE [mips]:
   template<typename T, typename V>                                             \
   requires(sizeof(T) == sizeof(Mword)) inline                                  \
   T                                                                            \
-  __f_atomic_fetch_##name(T *mem, V value)                                     \
+  atomic_fetch_##name##_relaxed(T *mem, V value)                               \
   {                                                                            \
     T val = value;                                                             \
     T old;                                                                     \
@@ -50,7 +51,7 @@ INTERFACE [mips]:
   template<typename T, typename V>                                             \
   requires(sizeof(T) == sizeof(Mword)) inline                                  \
   T                                                                            \
-  __f_atomic_##name##_fetch(T *mem, V value)                                   \
+  atomic_##name##_fetch_relaxed(T *mem, V value)                               \
   {                                                                            \
     T val = value;                                                             \
     T res;                                                                     \
@@ -73,11 +74,82 @@ ATOMIC_OP(or, "or")
 ATOMIC_OP(and, "and")
 ATOMIC_OP(add, ASM_ADDU)
 #undef ATOMIC_OP
+// preprocess on
+
+template<typename T> requires(sizeof(T) == 4) inline
+T
+atomic_load_relaxed(T const *mem)
+{
+  T res;
+  __asm__ __volatile__ ("lw %0, %1" : "=r" (res) : "m"(*mem));
+  return res;
+}
+
+template<typename T> requires(sizeof(T) == 8) inline
+T
+atomic_load_relaxed(T const *mem)
+{
+  T res;
+  __asm__ __volatile__ ("ld %0, %1" : "=r" (res) : "m"(*mem));
+  return res;
+}
+
+template<typename T, typename V> requires(sizeof(T) == 4) inline
+void
+atomic_store_relaxed(T *mem, V value)
+{
+  T val = value;
+  __asm__ __volatile__ ("sw %1, %0" : "=m" (*mem) : "r" (val));
+}
+
+template<typename T, typename V> requires(sizeof(T) == 8) inline
+void
+atomic_store_relaxed(T *mem, V value)
+{
+  T val = value;
+  __asm__ __volatile__ ("sd %1, %0" : "=m" (*mem) : "r" (val));
+}
+
+template<typename T> inline
+T
+atomic_load_acquire(T const *mem)
+{
+  T res = atomic_load_relaxed(mem);
+  Mem::mp_mb();
+  return res;
+}
+
+template<typename T> inline
+T
+atomic_load_seq_cst(T const *mem)
+{
+  Mem::mp_mb();
+  T res = atomic_load_relaxed(mem);
+  Mem::mp_mb();
+  return res;
+}
+
+template<typename T, typename V> inline
+void
+atomic_store_release(T *mem, V value)
+{
+  Mem::mp_mb();
+  atomic_store_relaxed(mem, value);
+}
+
+template<typename T, typename V> inline
+void
+atomic_store_seq_cst(T *mem, V value)
+{
+  Mem::mp_mb();
+  atomic_store_relaxed(mem, value);
+  Mem::mp_mb();
+}
 
 template<typename T, typename V>
 requires(sizeof(T) == sizeof(Mword)) inline
 T
-__f_atomic_exchange(T *mem, V value)
+atomic_exchange_relaxed(T *mem, V value)
 {
   T val = value;
   T old;
@@ -95,172 +167,10 @@ __f_atomic_exchange(T *mem, V value)
   while (!tmp);
   return old;
 }
-// preprocess on
-
-//----------------------------------------------------------------------------
-INTERFACE [mips && mp]:
-
-#include "mem.h"
-
-// preprocess off
-#define ATOMIC_OP_(name)                                                       \
-  template<typename T, typename V>                                             \
-  requires(sizeof(T) == sizeof(Mword)) inline                                  \
-  void                                                                         \
-  atomic_##name(T *mem, V value)                                               \
-  {                                                                            \
-    Mem::mp_mb();                                                              \
-    __f_atomic_##name<T, V>(mem, value);                                       \
-    Mem::mp_mb();                                                              \
-  }                                                                            \
-
-#define ATOMIC_RET_OP_(name)                                                   \
-  template<typename T, typename V>                                             \
-  requires(sizeof(T) == sizeof(Mword)) inline                                  \
-  T                                                                            \
-  atomic_##name(T *mem, V value)                                               \
-  {                                                                            \
-    Mem::mp_mb();                                                              \
-    T res = __f_atomic_##name<T, V>(mem, value);                           \
-    Mem::mp_mb();                                                              \
-    return res;                                                                \
-  }
-
-#define ATOMIC_OP(name)                                                        \
-  ATOMIC_OP_(name)                                                             \
-  ATOMIC_RET_OP_(fetch_##name)                                                 \
-  ATOMIC_RET_OP_(name##_fetch)
-
-ATOMIC_OP(or)
-ATOMIC_OP(and)
-ATOMIC_OP(add)
-#undef ATOMIC_OP_
-#undef ATOMIC_RET_OP_
-#undef ATOMIC_OP
-
-template<typename T, typename V>
-requires(sizeof(T) == sizeof(Mword)) inline
-T
-atomic_exchange(T *mem, V value)
-{
-  Mem::mp_mb();
-  T res = __f_atomic_exchange<T, V>(mem, value);
-  Mem::mp_mb();
-  return res;
-}
-// preprocess on
-
-//----------------------------------------------------------------------------
-INTERFACE [mips && !mp]:
-
-#include "mem.h"
-
-// preprocess off
-#define ATOMIC_OP_(name)                                                       \
-  template<typename T, typename V>                                             \
-  requires(sizeof(T) == sizeof(Mword)) inline                                  \
-  void                                                                         \
-  atomic_##name(T *mem, V value)                                               \
-  {                                                                            \
-    __f_atomic_##name<T, V>(mem, value);                                       \
-  }                                                                            \
-
-#define ATOMIC_RET_OP_(name)                                                   \
-  template<typename T, typename V>                                             \
-  requires(sizeof(T) == sizeof(Mword)) inline                                  \
-  T                                                                            \
-  atomic_##name(T *mem, V value)                                               \
-  {                                                                            \
-    return __f_atomic_##name<T, V>(mem, value);                                \
-  }
-
-#define ATOMIC_OP(name)                                                        \
-  ATOMIC_OP_(name)                                                             \
-  ATOMIC_RET_OP_(fetch_##name)                                                 \
-  ATOMIC_RET_OP_(name##_fetch)                                                 \
-
-ATOMIC_OP(or)
-ATOMIC_OP(and)
-ATOMIC_OP(add)
-#undef ATOMIC_OP_
-#undef ATOMIC_RET_OP_
-#undef ATOMIC_OP
-
-template<typename T, typename V>
-requires(sizeof(T) == sizeof(Mword)) inline
-T
-atomic_exchange(T *mem, V value)
-{
-  return __f_atomic_exchange<T, V>(mem, value);
-}
-// preprocess on
-
-//---------------------------------------------------------------------------
-IMPLEMENTATION [mips]:
-
-template<typename T> requires(sizeof(T) == 4) inline
-T
-atomic_load(T const *mem)
-{
-  T res;
-  __asm__ __volatile__ ("lw %0, %1" : "=r" (res) : "m"(*mem));
-  return res;
-}
-
-template<typename T> requires(sizeof(T) == 8) inline
-T
-atomic_load(T const *mem)
-{
-  T res;
-  __asm__ __volatile__ ("ld %0, %1" : "=r" (res) : "m"(*mem));
-  return res;
-}
-
-template<typename T, typename V> requires(sizeof(T) == 4) inline
-void
-atomic_store(T *mem, V value)
-{
-  T val = value;
-  __asm__ __volatile__ ("sw %1, %0" : "=m" (*mem) : "r" (val));
-}
-
-template<typename T, typename V> requires(sizeof(T) == 8) inline
-void
-atomic_store(T *mem, V value)
-{
-  T val = value;
-  __asm__ __volatile__ ("sd %1, %0" : "=m" (*mem) : "r" (val));
-}
-
-inline
-void
-local_atomic_and(Mword *mem, Mword value)
-{
-  __f_atomic_and<Mword, Mword>(mem, value);
-}
-
-inline
-void
-local_atomic_or(Mword *mem, Mword value)
-{
-  __f_atomic_or<Mword, Mword>(mem, value);
-}
-
-inline
-void
-local_atomic_add(Mword *mem, Mword value)
-{
-  __f_atomic_add<Mword, Mword>(mem, value);
-}
-
-// ``unsafe'' stands for no safety according to the size of the given type.
-// There are type safe versions of the cas operations in the architecture
-// independent part of atomic that use the unsafe versions and make a type
-// check.
 
 inline NEEDS["asm_mips.h"]
 bool
-local_cas_unsafe(Mword *ptr, Mword oldval, Mword newval)
+cas_arch_relaxed(Mword *ptr, Mword oldval, Mword newval)
 {
   Mword ret;
 
@@ -286,24 +196,94 @@ local_cas_unsafe(Mword *ptr, Mword oldval, Mword newval)
   return ret == oldval;
 }
 
+// preprocess off
+#define WRAP_ATOMIC_OP_VOID(name, order, pre, post)                            \
+  template<typename T, typename V>  inline                                     \
+  void                                                                         \
+  name##_##order(T *mem, V value)                                              \
+  {                                                                            \
+    pre;                                                                       \
+    name ## _relaxed(mem, value);                                              \
+    post;                                                                      \
+  }
+
+#define WRAP_ATOMIC_OP_RET(name, order, pre, post)                             \
+  template<typename T, typename V>  inline                                     \
+  T                                                                            \
+  name##_##order(T *mem, V value)                                              \
+  {                                                                            \
+    pre;                                                                       \
+    T res = name ## _relaxed(mem, value);                                      \
+    post;                                                                      \
+    return res;                                                                \
+  }
+
+#define WRAP_ATOMIC_OP_CAS(name, order, pre, post)                             \
+  inline                                                                       \
+  bool                                                                         \
+  name##_##order(Mword *ptr, Mword oldval, Mword newval)                       \
+  {                                                                            \
+    pre;                                                                       \
+    Mword res = name ## _relaxed(ptr, oldval, newval);                         \
+    post;                                                                      \
+    return res;                                                                \
+  }
+
+#define ATOMIC_IMPL_VARIANTS(OP_MACRO, name)                                   \
+  OP_MACRO(name, acquire,             , Mem::mp_mb())                          \
+  OP_MACRO(name, release, Mem::mp_mb(),             )                          \
+  OP_MACRO(name, acq_rel, Mem::mp_mb(), Mem::mp_mb())                          \
+  OP_MACRO(name, seq_cst, Mem::mp_mb(), Mem::mp_mb())
+
+ATOMIC_IMPL_VARIANTS(WRAP_ATOMIC_OP_VOID, atomic_and)
+ATOMIC_IMPL_VARIANTS(WRAP_ATOMIC_OP_VOID, atomic_or)
+ATOMIC_IMPL_VARIANTS(WRAP_ATOMIC_OP_VOID, atomic_add)
+ATOMIC_IMPL_VARIANTS(WRAP_ATOMIC_OP_RET, atomic_fetch_and)
+ATOMIC_IMPL_VARIANTS(WRAP_ATOMIC_OP_RET, atomic_fetch_or)
+ATOMIC_IMPL_VARIANTS(WRAP_ATOMIC_OP_RET, atomic_fetch_add)
+ATOMIC_IMPL_VARIANTS(WRAP_ATOMIC_OP_RET, atomic_and_fetch)
+ATOMIC_IMPL_VARIANTS(WRAP_ATOMIC_OP_RET, atomic_or_fetch)
+ATOMIC_IMPL_VARIANTS(WRAP_ATOMIC_OP_RET, atomic_add_fetch)
+ATOMIC_IMPL_VARIANTS(WRAP_ATOMIC_OP_RET, atomic_exchange)
+ATOMIC_IMPL_VARIANTS(WRAP_ATOMIC_OP_CAS, cas_arch)
+
+#undef ATOMIC_IMPL_VARIANTS
+#undef ATOMIC_OP_VOID
+#undef ATOMIC_OP_RET
+#undef ATOMIC_OP_CAS
+// preprocess on
+
 //---------------------------------------------------------------------------
-IMPLEMENTATION [mips && mp]:
+IMPLEMENTATION [mips]:
+
+#include "mem.h"
 
 inline
-bool
-cas_arch(Mword *m, Mword o, Mword n)
+void
+local_atomic_and(Mword *mem, Mword value)
 {
-  Mem::mp_mb();
-  Mword ret = local_cas_unsafe(m, o, n);
-  Mem::mp_mb();
-  return ret;
+  atomic_and_relaxed<Mword, Mword>(mem, value);
 }
 
-//---------------------------------------------------------------------------
-IMPLEMENTATION [mips && !mp]:
+inline
+void
+local_atomic_or(Mword *mem, Mword value)
+{
+  atomic_or_relaxed<Mword, Mword>(mem, value);
+}
 
 inline
-bool
-cas_arch(Mword *m, Mword o, Mword n)
-{ return local_cas_unsafe(m, o, n); }
+void
+local_atomic_add(Mword *mem, Mword value)
+{
+  atomic_add_relaxed<Mword, Mword>(mem, value);
+}
 
+// ``unsafe'' stands for no safety according to the size of the given type.
+// There are type safe versions of the cas operations in the architecture
+// independent part of atomic that use the unsafe versions and make a type
+// check.
+inline
+bool
+local_cas_unsafe(Mword *m, Mword o, Mword n)
+{ return cas_arch_relaxed(m, o, n); }
