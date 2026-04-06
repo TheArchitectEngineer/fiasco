@@ -93,6 +93,34 @@ atomic_load(T const *mem)
 { return atomic_load_seq_cst<T>(mem); }
 
 /**
+ * Atomically load a pointer value that then carries a data-dependency.
+ *
+ * \param  mem  Pointer to the memory to load the pointer from.
+ *
+ * \note Must be only used with pointers, integers are just to prone for
+ *       incorrect-optimizations by the compiler.
+ *       However, bit twiddling is allowed, by casting to unintptr_t and back,
+ *       but bits must be preserved (see rcu document in Linux).
+ */
+template<typename T> inline
+T
+atomic_load_consume(T const *mem)
+{
+    static_assert(cxx::is_pointer_v<T>, "Must be pointer.");
+    static_assert(sizeof(T) == sizeof(void *), "Must be regular pointer-sized.");
+    // All hardware implementations (apart from the DEC Alpha) respect
+    // data-dependencies. The tricky thing is to prevent the compiler from
+    // transforming the code in a way that replaces the data-depenceny with a
+    // control-dependency, since the latter is not honored by hardware.
+    // The compiler is prone to do such optimizations, if it has too much
+    // information about potential pointer values (translation-unit local
+    // variable, LTO, profile-driven optimization).
+    //
+    // NOTE: A test case ensures that the compiler cannot destroy our "volatile" workaround.
+    return *static_cast<T const volatile *>(mem);
+}
+
+/**
  * Atomically store a value to the given memory location.
  *
  * Performs the store operation using sequentially consistent memory order,
