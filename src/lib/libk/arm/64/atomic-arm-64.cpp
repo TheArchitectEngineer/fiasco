@@ -110,25 +110,27 @@ ATOMIC_LX_SX_VARIANTS(ATOMIC_LX_SX_EXCHANGE, 8, x)
 #undef ATOMIC_LX_SX_EXCHANGE
 
 
-#define ATOMIC_LX_SX_CAS(order_name, ol, os, /*cl*/...)                        \
-  inline                                                                       \
+#define ATOMIC_LX_SX_CAS(size,pfx, order_name, ol, os, /*cl*/...)              \
+  template<typename T>                                                         \
+  requires(sizeof(T) == size) inline                                           \
   bool                                                                         \
-  _lx_sx_cas_arch##order_name(Mword *m, Mword o, Mword n)                      \
+  _lx_sx_cas##order_name(T *mem, T oldval, T newval)                           \
   {                                                                            \
-    Mword tmp, res;                                                            \
+    T tmp;                                                                     \
+    Mword res;                                                                 \
                                                                                \
     asm volatile                                                               \
-      ("mov     %[res], #1          \n"                                        \
-       "prfm    pstl1strm, %[m]     \n"                                        \
-       "1:                          \n"                                        \
-       "ld"#ol"xr    %[tmp], %[m]   \n"                                        \
-       "cmp     %[tmp], %[o]        \n"                                        \
-       "b.ne    2f                  \n"                                        \
-       "st"#os"xr   %w[res], %[n], %[m] \n"                                    \
-       "cbnz    %w[res], 1b         \n"                                        \
-       "2:                          \n"                                        \
-       : [tmp] "=&r" (tmp), [res] "=&r" (res), [m] "+Q" (*m)                   \
-       : [n] "r" (n), [o] "r" (o)                                              \
+      ("mov     %[res], #1 \n"                                                 \
+       "prfm    pstl1strm, %[mem] \n"                                          \
+       "1: \n"                                                                 \
+       "ld"#ol"xr    %"#pfx"[tmp], %[mem] \n"                                  \
+       "cmp     %"#pfx"[tmp], %"#pfx"[oldval] \n"                              \
+       "b.ne    2f \n"                                                         \
+       "st"#os"xr   %w[res], %"#pfx"[newval], %[mem] \n"                       \
+       "cbnz    %w[res], 1b \n"                                                \
+       "2: \n"                                                                 \
+       : [tmp] "=&r" (tmp), [res] "=&r" (res), [mem] "+Q" (*mem)               \
+       : [newval] "r" (newval), [oldval] "r" (oldval)                          \
        : "cc" __VA_OPT__(,) __VA_ARGS__);                                      \
                                                                                \
     /* res == 0 is ok */                                                       \
@@ -136,7 +138,8 @@ ATOMIC_LX_SX_VARIANTS(ATOMIC_LX_SX_EXCHANGE, 8, x)
                                                                                \
     return !res;                                                               \
   }
-ATOMIC_LX_SX_VARIANTS(ATOMIC_LX_SX_CAS)
+ATOMIC_LX_SX_VARIANTS(ATOMIC_LX_SX_CAS, 4, w)
+ATOMIC_LX_SX_VARIANTS(ATOMIC_LX_SX_CAS, 8, x)
 #undef ATOMIC_LX_SX_CAS
 #undef ATOMIC_LX_SX_VARIANTS
 
@@ -234,22 +237,24 @@ ATOMIC_LSE_VARIANTS(ATOMIC_LSE_EXCHANGE, 8, x)
 #undef ATOMIC_LSE_EXCHANGE
 
 
-#define ATOMIC_LSE_CAS(order_name, order, cl)                                  \
-  inline                                                                       \
+#define ATOMIC_LSE_CAS(size, pfx, order_name, order, cl)                       \
+  template<typename T>                                                         \
+  requires(sizeof(T) == size) inline                                           \
   bool                                                                         \
-  _lse_cas_arch##order_name(Mword *mem, Mword oldval, Mword newval)            \
+  _lse_cas##order_name(T *mem, T oldval, T newval)                             \
   {                                                                            \
-    Mword old = oldval;                                                        \
+    T old = oldval;                                                            \
     asm volatile (                                                             \
         ".arch_extension lse \n"                                               \
-        "cas"#order " %[o], %[n], %[mem] \n"                                   \
-        : [o] "+r" (old), [mem] "+Q" (*mem)                                    \
-        : [n] "r" (newval)                                                     \
+        "cas"#order " %"#pfx"[old], %"#pfx"[newval], %[mem] \n"                \
+        : [old] "+r" (old), [mem] "+Q" (*mem)                                  \
+        : [newval] "r" (newval)                                                \
         : cl);                                                                 \
                                                                                \
     return old == oldval;                                                      \
   }
-ATOMIC_LSE_VARIANTS(ATOMIC_LSE_CAS)
+ATOMIC_LSE_VARIANTS(ATOMIC_LSE_CAS, 4, w)
+ATOMIC_LSE_VARIANTS(ATOMIC_LSE_CAS, 8, x)
 #undef ATOMIC_LSE_CAS
 #undef ATOMIC_LSE_VARIANTS
 
@@ -348,9 +353,9 @@ ATOMIC_IMPL(T, atomic_exchange)
 #undef ATOMIC_IMPL
 
 #define ATOMIC_IMPL_CAS(name)                                                  \
-  inline                                                                       \
+  template<typename T> inline                                                  \
   bool                                                                         \
-  name(Mword *mem, Mword oldval, Mword newval)                                 \
+  name(T *mem, T oldval, T newval)                                             \
   {                                                                            \
     if constexpr (TAG_ENABLED(arm_lse))                                        \
       return _lse_##name(mem, oldval, newval);                                 \
@@ -360,7 +365,7 @@ ATOMIC_IMPL(T, atomic_exchange)
     else                                                                       \
       return _lx_sx_##name(mem, oldval, newval);                               \
   }
-ATOMIC_IMPL_VARIANTS(ATOMIC_IMPL_CAS, cas_arch)
+ATOMIC_IMPL_VARIANTS(ATOMIC_IMPL_CAS, cas)
 #undef ATOMIC_IMPL_CAS
 #undef ATOMIC_IMPL_VARIANTS
 // preprocess on

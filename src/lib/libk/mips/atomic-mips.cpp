@@ -168,25 +168,26 @@ atomic_exchange_relaxed(T *mem, V value)
   return old;
 }
 
-inline NEEDS["asm_mips.h"]
+template<typename T>
+requires(sizeof(T) == sizeof(Mword)) inline NEEDS["asm_mips.h"]
 bool
-cas_arch_relaxed(Mword *ptr, Mword oldval, Mword newval)
+cas_relaxed(T *mem, T oldval, T newval)
 {
-  Mword ret;
+  T ret;
 
   __asm__ __volatile__(
       "     .set    push                \n"
       "     .set    noat    #CAS        \n"
       "     .set    noreorder           \n"
-      "1:   " ASM_LL " %[ret], %[ptr]   \n"
+      "1:   " ASM_LL " %[ret], %[mem]   \n"
       "     bne     %[ret], %z[old], 2f \n"
       "       move $1, %z[newval]       \n"
-      "     " ASM_SC " $1, %[ptr]       \n"
+      "     " ASM_SC " $1, %[mem]       \n"
       "     beqz    $1, 1b              \n"
       "       nop                       \n"
       "2:                               \n"
       "     .set    pop                 \n"
-      : [ret] "=&r" (ret), [ptr] "+ZC" (*ptr)
+      : [ret] "=&r" (ret), [mem] "+ZC" (*mem)
       : [old] "Jr" (oldval), [newval] "Jr" (newval)
       : "memory"); // for some unknown reason this is necessary for newer
                    // gcc compilers
@@ -219,12 +220,12 @@ cas_arch_relaxed(Mword *ptr, Mword oldval, Mword newval)
   }
 
 #define WRAP_ATOMIC_OP_CAS(name, order, pre, post)                             \
-  inline                                                                       \
+  template<typename T> inline                                                  \
   bool                                                                         \
-  name##_##order(Mword *ptr, Mword oldval, Mword newval)                       \
+  name##_##order(T *mem, T oldval, T newval)                                   \
   {                                                                            \
     pre;                                                                       \
-    Mword res = name ## _relaxed(ptr, oldval, newval);                         \
+    bool res = name ## _relaxed(mem, oldval, newval);                          \
     post;                                                                      \
     return res;                                                                \
   }
@@ -245,7 +246,7 @@ ATOMIC_IMPL_VARIANTS(WRAP_ATOMIC_OP_RET, atomic_and_fetch)
 ATOMIC_IMPL_VARIANTS(WRAP_ATOMIC_OP_RET, atomic_or_fetch)
 ATOMIC_IMPL_VARIANTS(WRAP_ATOMIC_OP_RET, atomic_add_fetch)
 ATOMIC_IMPL_VARIANTS(WRAP_ATOMIC_OP_RET, atomic_exchange)
-ATOMIC_IMPL_VARIANTS(WRAP_ATOMIC_OP_CAS, cas_arch)
+ATOMIC_IMPL_VARIANTS(WRAP_ATOMIC_OP_CAS, cas)
 
 #undef ATOMIC_IMPL_VARIANTS
 #undef ATOMIC_OP_VOID
@@ -286,4 +287,4 @@ local_atomic_add(Mword *mem, Mword value)
 inline
 bool
 local_cas_unsafe(Mword *m, Mword o, Mword n)
-{ return cas_arch_relaxed(m, o, n); }
+{ return cas_relaxed(m, o, n); }

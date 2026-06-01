@@ -335,15 +335,15 @@ IMPLEMENTATION [!mp]:
  * from other CPUs (SMP-safe). On UP systems, this function is equivalent to
  * \see 'local_cas'.
  *
- * \param ptr     Pointer to the memory to change.
+ * \param mem     Pointer to the memory to change.
  * \param oldval  Only write 'newval' if the memory contains this value.
  * \param newval  Write this value if the memory contains 'oldval'.
  * \return True if the memory was written, false otherwise.
  */
 template< typename T > inline
 bool
-cas(T *ptr, T oldval, T newval)
-{ return local_cas(ptr, oldval, newval); }
+cas(T *mem, T oldval, T newval)
+{ return local_cas(mem, oldval, newval); }
 
 //---------------------------------------------------------------------------
 IMPLEMENTATION [mp]:
@@ -359,23 +359,14 @@ IMPLEMENTATION [mp]:
  * If required, use one of the variants that explicitly specify the
  * memory order: relaxed, acquire, release, acq_rel or seq_cst
  *
- * \param ptr     Pointer to the memory to change.
+ * \param mem     Pointer to the memory to change.
  * \param oldval  Only write 'newval' if the memory contains this value.
  * \param newval  Write this value if the memory contains 'oldval'.
  * \return True if the memory was written, false otherwise.
  */
 template< typename T > inline
 bool
-cas(T *ptr, T oldval, T newval)
+cas(T *mem, T oldval, T newval)
 {
-  static_assert(sizeof(T) == sizeof(Mword));
-
-  if constexpr (cxx::is_pointer_v<T>)
-    return cas_arch_seq_cst(reinterpret_cast<Mword*>(ptr),
-                            reinterpret_cast<Mword>(oldval),
-                            reinterpret_cast<Mword>(newval));
-  else
-    return cas_arch_seq_cst(reinterpret_cast<Mword*>(ptr),
-                            static_cast<Mword>(oldval),
-                            static_cast<Mword>(newval));
+  return cas_seq_cst<T>(mem, oldval, newval);
 }

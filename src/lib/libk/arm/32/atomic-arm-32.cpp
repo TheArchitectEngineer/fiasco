@@ -317,13 +317,11 @@ atomic_store_relaxed(T *p, V value)
 // --------------------------------------------------------------------
 INTERFACE[arm && arm_v6plus]:
 
-#include "mem.h"
-
-inline NEEDS["mem.h"]
+template<typename T> requires(sizeof(T) == 4) inline
 bool
-cas_arch_relaxed(Mword *m, Mword o, Mword n)
+cas_relaxed(T *m, T o, T n)
 {
-  Mword tmp, res;
+  T tmp, res;
 
   asm volatile
     ("mov     %[res], #1           \n"
@@ -409,12 +407,12 @@ atomic_store_seq_cst(T *mem, V value)
   }
 
 #define WRAP_ATOMIC_OP_CAS(name, order, pre, post)                             \
-  inline                                                                       \
+  template<typename T> inline                                                  \
   bool                                                                         \
-  name##_##order(Mword *ptr, Mword oldval, Mword newval)                       \
+  name##_##order(T *mem, T oldval, T newval)                                   \
   {                                                                            \
     pre;                                                                       \
-    Mword res = name ## _relaxed(ptr, oldval, newval);                         \
+    bool res = name ## _relaxed(mem, oldval, newval);                          \
     post;                                                                      \
     return res;                                                                \
   }
@@ -435,7 +433,7 @@ ATOMIC_IMPL_VARIANTS(WRAP_ATOMIC_OP_RET, atomic_and_fetch)
 ATOMIC_IMPL_VARIANTS(WRAP_ATOMIC_OP_RET, atomic_or_fetch)
 ATOMIC_IMPL_VARIANTS(WRAP_ATOMIC_OP_RET, atomic_add_fetch)
 ATOMIC_IMPL_VARIANTS(WRAP_ATOMIC_OP_RET, atomic_exchange)
-ATOMIC_IMPL_VARIANTS(WRAP_ATOMIC_OP_CAS, cas_arch)
+ATOMIC_IMPL_VARIANTS(WRAP_ATOMIC_OP_CAS, cas)
 
 #undef ATOMIC_IMPL_VARIANTS
 #undef ATOMIC_OP_VOID

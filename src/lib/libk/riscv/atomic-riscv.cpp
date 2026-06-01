@@ -1,7 +1,5 @@
 INTERFACE [riscv]:
 
-#include "asm_riscv.h"
-
 // preprocess off
 #define ATOMIC_LOAD_OP_(size, suffix, order_name, pre_fence, post_fence, cl)   \
   template<typename T> requires(sizeof(T) == size) inline                      \
@@ -147,28 +145,33 @@ ATOMIC_OP_FETCH(add)
 #undef ATOMIC_VARIANTS
 
 
-#define ATOMIC_CAS_OP(order_name, ol, os, cl)                                  \
-  inline                                                                       \
+#define ATOMIC_CAS_OP_(size, suffix, order_name, ol, os, cl)                   \
+  template<typename T>                                                         \
+  requires(sizeof(T) == size) inline                                           \
   bool                                                                         \
-  cas_arch##order_name(Mword *ptr, Mword oldval, Mword newval)                 \
+  cas##order_name(T *mem, T oldval, T newval)                                  \
   {                                                                            \
-    Mword prev;                                                                \
+    T prev;                                                                    \
     /* Holds return value of SC instruction: 0 if successful, !0 otherwise */  \
     Mword ret = 1;                                                             \
                                                                                \
     asm volatile (                                                             \
       "0:                                     \n"                              \
-      REG_LR #ol " %[prev], %[ptr]            \n"                              \
+      "lr." #suffix #ol " %[prev], %[mem]            \n"                       \
       "bne         %[prev], %[oldval], 1f     \n"                              \
-      REG_SC #os " %[ret],  %[newval], %[ptr] \n"                              \
+      "sc." #suffix #os " %[ret],  %[newval], %[mem] \n"                       \
       "bnez        %[ret],  0b                \n"                              \
       "1:                                     \n"                              \
-      : [prev]"=&r" (prev), [ret]"+&r" (ret), [ptr]"+A" (*ptr)                 \
+      : [prev]"=&r" (prev), [ret]"+&r" (ret), [mem]"+A" (*mem)                 \
       : [newval]"r" (newval), [oldval]"r" (oldval)                             \
       : cl);                                                                   \
                                                                                \
     return ret == 0;                                                           \
   }
+
+#define ATOMIC_CAS_OP(order_name, ol, os, cl)                                  \
+  ATOMIC_CAS_OP_(4, w, order_name, ol, os, cl)                                 \
+  ATOMIC_CAS_OP_(8, d, order_name, ol, os, cl)
 
 ATOMIC_CAS_OP(_relaxed,      ,    ,         )
 ATOMIC_CAS_OP(_acquire, .aq  ,    , "memory")
@@ -176,6 +179,7 @@ ATOMIC_CAS_OP(_release,      , .rl, "memory")
 ATOMIC_CAS_OP(_acq_rel, .aq  , .rl, "memory")
 ATOMIC_CAS_OP(_seq_cst, .aqrl, .rl, "memory")
 #undef ATOMIC_CAS_OP
+#undef ATOMIC_CAS_OP_
 // preprocess on
 
 //----------------------------------------------------------------------------
@@ -211,5 +215,5 @@ inline
 bool
 local_cas_unsafe(Mword *ptr, Mword oldval, Mword newval)
 {
-  return cas_arch_relaxed(ptr, oldval, newval);
+  return cas_relaxed(ptr, oldval, newval);
 }

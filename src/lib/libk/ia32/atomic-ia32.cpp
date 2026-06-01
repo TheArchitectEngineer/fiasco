@@ -28,14 +28,15 @@ ATOMIC_VARIANTS(ATOMIC_OP, add)
 
 
 #define ATOMIC_CAS_OP(order_name, cl)                                          \
-  inline ALWAYS_INLINE                                                         \
+  template<typename T> requires(sizeof(T) == 4) inline                         \
   bool                                                                         \
-  cas_arch##order_name(Mword *ptr, Mword cmpval, Mword newval)                 \
+  cas##order_name(T *mem, T cmpval, T newval)                                  \
   {                                                                            \
-    Mword oldval_ignore, zflag;                                                \
-    asm volatile ("lock; cmpxchgl %[newval], %[ptr]"                           \
+    T oldval_ignore;                                                           \
+    Mword zflag;                                                               \
+    asm volatile ("lock; cmpxchgl %[newval], %[mem]"                           \
                   : "=a"(oldval_ignore), "=@ccz"(zflag)                        \
-                  : [newval]"r"(newval), [ptr]"m"(*ptr), "a"(cmpval)           \
+                  : [newval]"r"(newval), [mem]"m"(*mem), "a"(cmpval)           \
                   : cl);                                                       \
     return zflag;                                                              \
   }
@@ -48,16 +49,13 @@ ATOMIC_VARIANTS(ATOMIC_CAS_OP)
   T                                                                            \
   atomic_fetch_##op##order_name(T *mem, V value)                               \
   {                                                                            \
-    static_assert(sizeof(T) == sizeof(Mword));                                 \
     T val = value;                                                             \
     T old;                                                                     \
     do                                                                         \
       {                                                                        \
         old = *mem;                                                            \
       }                                                                        \
-    while (!cas_arch##order_name(reinterpret_cast<Mword *>(mem),               \
-                                 static_cast<Mword>(old),                      \
-                                 static_cast<Mword>(old cop val)));            \
+    while (!cas##order_name(mem, old, old cop val));                           \
     return old;                                                                \
   }                                                                            \
                                                                                \
@@ -65,16 +63,13 @@ ATOMIC_VARIANTS(ATOMIC_CAS_OP)
   T                                                                            \
   atomic_##op##_fetch##order_name(T *mem, V value)                             \
   {                                                                            \
-    static_assert(sizeof(T) == sizeof(Mword));                                 \
     T val = value;                                                             \
     T old;                                                                     \
     do                                                                         \
       {                                                                        \
         old = *mem;                                                            \
       }                                                                        \
-    while (!cas_arch##order_name(reinterpret_cast<Mword *>(mem),               \
-                                 static_cast<Mword>(old),                      \
-                                 static_cast<Mword>(old cop val)));            \
+    while (!cas##order_name(mem, old, old cop val));                           \
     return old cop val;                                                        \
   }
 ATOMIC_VARIANTS(ATOMIC_OP, and, &)
