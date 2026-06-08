@@ -121,7 +121,7 @@ Semaphore::sem_partner()
 { return reinterpret_cast<Sender *>(5); }
 
 PRIVATE inline NOEXPORT ALWAYS_INLINE
-void
+bool
 Semaphore::down(Thread *ct)
 {
     {
@@ -129,12 +129,12 @@ Semaphore::down(Thread *ct)
       if (_queued == 0)
         {
           // This check is necessary to ensure that a thread does not enqueue
-          // itself into the semaphore´s waiting queue after the semaphore
+          // itself into the semaphore’s waiting queue after the semaphore
           // emptied its waiting queue and unblocked the waiters. Because then
           // the thread would block forever (assuming it specified an infinite
           // timeout).
-          if (!existence_lock.valid())
-            return;
+          if (!existence_lock.valid()) [[unlikely]]
+            return false;
 
           // set fake partner to avoid IPCs to the thread
           ct->set_partner(sem_partner());
@@ -149,6 +149,8 @@ Semaphore::down(Thread *ct)
    // auto unmask edge triggered IRQs if there is just one pending IRQ left
    if (access_once(&_queued) == 1 && hit_func == &hit_edge_irq)
      unmask();
+
+  return true;
 }
 
 /*
@@ -175,7 +177,8 @@ Semaphore::sys_down(L4_fpage::Rights rights, L4_timeout t, Utcb const *utcb)
   // Reset IPC error -- Semaphore::destroy() could set it.
   const_cast<Utcb*>(utcb)->error = L4_error::None;
 
-  down(c_thread);
+  if (!down(c_thread)) [[unlikely]]
+    return commit_error(utcb, L4_error::Not_existent);
 
   IPC_timeout timeout;
 
