@@ -126,10 +126,13 @@ ATOMIC_FETCH_OP(exchange, swap)
                                                                                \
     asm volatile (                                                             \
       "amo" #op "." #suffix #order " %[res], %[val], %[mem] \n"                \
-      #op "         %[res], %[res], %[val] \n"                                 \
-      : [res]"=&r" (res), [mem]"+A"(*mem)                                      \
+      : [res]"=r" (res), [mem]"+A"(*mem)                                       \
       : [val]"r" (val)                                                         \
       : cl);                                                                   \
+                                                                               \
+    asm (#op " %[res], %[res], %[val] \n"                                      \
+         : [res] "+r" (res)                                                    \
+         : [val] "r" (val));                                                   \
     return res;                                                                \
   }
 
