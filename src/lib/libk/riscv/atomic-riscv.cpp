@@ -72,24 +72,12 @@ ATOMIC_STORE_OP(_seq_cst, "fence rw, w", "fence rw, rw", "memory")
       : [mem]"+A"(*mem)                                                        \
       : [mask]"r" (val)                                                        \
       : cl);                                                                   \
-  }
-
-#define ATOMIC_OP(op)                                                          \
-  ATOMIC_VARIANTS(ATOMIC_OP_, op, 4, w)                                        \
-  ATOMIC_VARIANTS(ATOMIC_OP_, op, 8, d)
-
-ATOMIC_OP(or)
-ATOMIC_OP(and)
-ATOMIC_OP(add)
-#undef ATOMIC_OP_
-#undef ATOMIC_OP
-
-
-#define ATOMIC_FETCH_OP_(name, op, size, suffix, order_name, order, cl)        \
+  }                                                                            \
+                                                                               \
   template<typename T, typename V>                                             \
   requires(sizeof(T) == size) inline                                           \
   T                                                                            \
-  atomic_##name##order_name(T *mem, V value)                                   \
+  atomic_fetch_##op##order_name(T *mem, V value)                               \
   {                                                                            \
     T val = value;                                                             \
     T prev;                                                                    \
@@ -100,21 +88,8 @@ ATOMIC_OP(add)
       : [mask]"r" (val)                                                        \
       : cl);                                                                   \
     return prev;                                                               \
-  }
-
-#define ATOMIC_FETCH_OP(name, op)                                              \
-  ATOMIC_VARIANTS(ATOMIC_FETCH_OP_, name, op, 4, w)                            \
-  ATOMIC_VARIANTS(ATOMIC_FETCH_OP_, name, op, 8, d)
-
-ATOMIC_FETCH_OP(fetch_or, or)
-ATOMIC_FETCH_OP(fetch_and, and)
-ATOMIC_FETCH_OP(fetch_add, add)
-ATOMIC_FETCH_OP(exchange, swap)
-#undef ATOMIC_FETCH_OP_
-#undef ATOMIC_FETCH_OP
-
-
-#define ATOMIC_OP_FETCH_(op, size, suffix, order_name, order, cl)              \
+  }                                                                            \
+                                                                               \
   template<typename T, typename V>                                             \
   requires(sizeof(T) == size) inline                                           \
   T                                                                            \
@@ -135,15 +110,36 @@ ATOMIC_FETCH_OP(exchange, swap)
     return res;                                                                \
   }
 
-#define ATOMIC_OP_FETCH(op)                                                    \
-  ATOMIC_VARIANTS(ATOMIC_OP_FETCH_, op, 4, w)                                  \
-  ATOMIC_VARIANTS(ATOMIC_OP_FETCH_, op, 8, d)
+#define ATOMIC_OP(op)                                                          \
+  ATOMIC_VARIANTS(ATOMIC_OP_, op, 4, w)                                        \
+  ATOMIC_VARIANTS(ATOMIC_OP_, op, 8, d)
 
-ATOMIC_OP_FETCH(or)
-ATOMIC_OP_FETCH(and)
-ATOMIC_OP_FETCH(add)
-#undef ATOMIC_OP_FETCH_
-#undef ATOMIC_OP_FETCH
+ATOMIC_OP(or)
+ATOMIC_OP(and)
+ATOMIC_OP(add)
+#undef ATOMIC_OP_
+#undef ATOMIC_OP
+
+
+#define ATOMIC_EXCHANGE_OP(size, suffix, order_name, order, cl)                \
+  template<typename T, typename V>                                             \
+  requires(sizeof(T) == size) inline                                           \
+  T                                                                            \
+  atomic_exchange##order_name(T *mem, V value)                                 \
+  {                                                                            \
+    T val = value;                                                             \
+    T prev;                                                                    \
+                                                                               \
+    asm volatile (                                                             \
+      "amoswap." #suffix #order " %[prev], %[mask], %[mem]"                    \
+      : [prev]"=r" (prev), [mem]"+A"(*mem)                                     \
+      : [mask]"r" (val)                                                        \
+      : cl);                                                                   \
+    return prev;                                                               \
+  }
+ATOMIC_VARIANTS(ATOMIC_EXCHANGE_OP, 4, w)
+ATOMIC_VARIANTS(ATOMIC_EXCHANGE_OP, 8, d)
+#undef ATOMIC_EXCHANGE_OP
 #undef ATOMIC_VARIANTS
 
 
