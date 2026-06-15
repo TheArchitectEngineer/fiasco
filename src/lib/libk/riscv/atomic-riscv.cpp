@@ -65,6 +65,7 @@ ATOMIC_STORE_OP(_seq_cst, "fence rw, w", "fence rw, rw", "memory")
   void                                                                         \
   atomic_##op##order_name(T *mem, V value)                                     \
   {                                                                            \
+    static_assert(cxx::is_integral_v<T>);                                      \
     T val = value;                                                             \
                                                                                \
     asm volatile (                                                             \
@@ -79,6 +80,7 @@ ATOMIC_STORE_OP(_seq_cst, "fence rw, w", "fence rw, rw", "memory")
   T                                                                            \
   atomic_fetch_##op##order_name(T *mem, V value)                               \
   {                                                                            \
+    static_assert(cxx::is_integral_v<T>);                                      \
     T val = value;                                                             \
     T prev;                                                                    \
                                                                                \
@@ -95,6 +97,7 @@ ATOMIC_STORE_OP(_seq_cst, "fence rw, w", "fence rw, rw", "memory")
   T                                                                            \
   atomic_##op##_fetch##order_name(T *mem, V value)                             \
   {                                                                            \
+    static_assert(cxx::is_integral_v<T>);                                      \
     T val = value;                                                             \
     T res;                                                                     \
                                                                                \

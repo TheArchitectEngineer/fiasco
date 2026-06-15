@@ -9,6 +9,7 @@ INTERFACE[arm && arm_v6plus]:
   void                                                                         \
   atomic_##name##_relaxed(T *mem, V value)                                     \
   {                                                                            \
+    static_assert(cxx::is_integral_v<T>);                                      \
     T val = value;                                                             \
     T res;                                                                     \
     Mword tmp;                                                                 \
@@ -29,6 +30,7 @@ INTERFACE[arm && arm_v6plus]:
   T                                                                            \
   atomic_fetch_##name##_relaxed(T *mem, V value)                               \
   {                                                                            \
+    static_assert(cxx::is_integral_v<T>);                                      \
     T val = value;                                                             \
     T res, old;                                                                \
     Mword tmp;                                                                 \
@@ -51,6 +53,7 @@ INTERFACE[arm && arm_v6plus]:
   T                                                                            \
   atomic_##name##_fetch_relaxed(T *mem, V value)                               \
   {                                                                            \
+    static_assert(cxx::is_integral_v<T>);                                      \
     T val = value;                                                             \
     T res;                                                                     \
     Mword tmp;                                                                 \
@@ -82,6 +85,7 @@ INTERFACE[arm && (arm_v7plus || (arm_v6 && mp))]:
   void                                                                         \
   atomic_##name##_relaxed(T *mem, V value)                                     \
   {                                                                            \
+    static_assert(cxx::is_integral_v<T>);                                      \
     T val = value;                                                             \
     T res;                                                                     \
     Mword tmp;                                                                 \
@@ -103,6 +107,7 @@ INTERFACE[arm && (arm_v7plus || (arm_v6 && mp))]:
   T                                                                            \
   atomic_fetch_##name##_relaxed(T *mem, V value)                               \
   {                                                                            \
+    static_assert(cxx::is_integral_v<T>);                                      \
     T val = value;                                                             \
     T res, old;                                                                \
     Mword tmp;                                                                 \
@@ -126,6 +131,7 @@ INTERFACE[arm && (arm_v7plus || (arm_v6 && mp))]:
   T                                                                            \
   atomic_##name##_fetch_relaxed(T *mem, V value)                               \
   {                                                                            \
+    static_assert(cxx::is_integral_v<T>);                                      \
     T val = value;                                                             \
     T res;                                                                     \
     Mword tmp;                                                                 \
@@ -223,6 +229,7 @@ requires(sizeof(T) == 8) inline NEEDS ["processor.h"]
 T
 atomic_add_fetch_relaxed(T *mem, V value)
 {
+  static_assert(cxx::is_integral_v<T>);
   Mword s = Proc::cli_save();
   T val = value;
   T res;
@@ -474,6 +481,7 @@ atomic_store_seq_cst(T *mem, V value)
   void                                                                         \
   atomic_##name##_relaxed(T *mem, V value)                                     \
   {                                                                            \
+    static_assert(cxx::is_integral_v<T>);                                      \
     T val = value;                                                             \
     Proc::Status s = Proc::cli_save();                                         \
     *mem op##= val;                                                            \
@@ -485,6 +493,7 @@ atomic_store_seq_cst(T *mem, V value)
   T                                                                            \
   atomic_##name##_fetch##_relaxed(T *mem, V value)                             \
   {                                                                            \
+    static_assert(cxx::is_integral_v<T>);                                      \
     T val = value;                                                             \
     Proc::Status s = Proc::cli_save();                                         \
     *mem op##= val;                                                            \
@@ -498,6 +507,7 @@ atomic_store_seq_cst(T *mem, V value)
   T                                                                            \
   atomic_fetch_##name##_relaxed(T *mem, V value)                               \
   {                                                                            \
+    static_assert(cxx::is_integral_v<T>);                                      \
     Proc::Status s = Proc::cli_save();                                         \
     T res = *mem;                                                              \
     *mem op##= value;                                                          \

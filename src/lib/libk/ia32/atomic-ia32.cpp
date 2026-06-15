@@ -14,7 +14,7 @@ INTERFACE [ia32]:
   void                                                                         \
   atomic_##op##order_name(T *mem, V value)                                     \
   {                                                                            \
-    static_assert(sizeof(T) == 4);                                             \
+    static_assert(cxx::is_integral_v<T> && sizeof(T) == 4);                    \
     T val = value;                                                             \
     asm volatile ("lock; " #op"l %1, %2"                                       \
                   : "=m"(*mem)                                                 \
@@ -49,6 +49,7 @@ ATOMIC_VARIANTS(ATOMIC_CAS_OP)
   T                                                                            \
   atomic_fetch_##op##order_name(T *mem, V value)                               \
   {                                                                            \
+    static_assert(cxx::is_integral_v<T>);                                      \
     T val = value;                                                             \
     T old;                                                                     \
     do                                                                         \
@@ -63,6 +64,7 @@ ATOMIC_VARIANTS(ATOMIC_CAS_OP)
   T                                                                            \
   atomic_##op##_fetch##order_name(T *mem, V value)                             \
   {                                                                            \
+    static_assert(cxx::is_integral_v<T>);                                      \
     T val = value;                                                             \
     T old;                                                                     \
     do                                                                         \
@@ -83,6 +85,7 @@ ATOMIC_VARIANTS(ATOMIC_OP, or, |)
   T                                                                            \
   atomic_fetch_add##order_name(T *mem, V value)                                \
   {                                                                            \
+    static_assert(cxx::is_integral_v<T>);                                      \
     T val = value;                                                             \
     T old;                                                                     \
     asm volatile ("lock; xadd %1, %0"                                          \
@@ -97,6 +100,7 @@ ATOMIC_VARIANTS(ATOMIC_OP, or, |)
   T                                                                            \
   atomic_add_fetch##order_name(T *mem, V value)                                \
   {                                                                            \
+    static_assert(cxx::is_integral_v<T>);                                      \
     T val = value;                                                             \
     T old;                                                                     \
     asm volatile ("lock; xadd %1, %0"                                          \

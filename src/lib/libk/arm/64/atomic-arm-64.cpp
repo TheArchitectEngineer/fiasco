@@ -17,6 +17,7 @@ INTERFACE [arm]:
   void                                                                         \
   _lx_sx_atomic_##name##order_name(T *mem, V value)                            \
   {                                                                            \
+    static_assert(cxx::is_integral_v<T>);                                      \
     T val = value;                                                             \
     T res;                                                                     \
     Mword tmp;                                                                 \
@@ -37,6 +38,7 @@ INTERFACE [arm]:
   T                                                                            \
   _lx_sx_atomic_fetch_##name##order_name(T *mem, V value)                      \
   {                                                                            \
+    static_assert(cxx::is_integral_v<T>);                                      \
     T val = value;                                                             \
     T res, old;                                                                \
     Mword tmp;                                                                 \
@@ -59,6 +61,7 @@ INTERFACE [arm]:
   T                                                                            \
   _lx_sx_atomic_##name##_fetch##order_name(T *mem, V value)                    \
   {                                                                            \
+    static_assert(cxx::is_integral_v<T>);                                      \
     T val = value;                                                             \
     T res;                                                                     \
     Mword tmp;                                                                 \
@@ -157,6 +160,7 @@ ATOMIC_LX_SX_VARIANTS(ATOMIC_LX_SX_CAS, 8, x)
   void                                                                         \
   _lse_atomic_##name##order_name(T *mem, V value)                              \
   {                                                                            \
+    static_assert(cxx::is_integral_v<T>);                                      \
     T val = value;                                                             \
     T old;                                                                     \
                                                                                \
@@ -175,6 +179,7 @@ ATOMIC_LX_SX_VARIANTS(ATOMIC_LX_SX_CAS, 8, x)
   T                                                                            \
   _lse_atomic_fetch_##name##order_name(T *mem, V value)                        \
   {                                                                            \
+    static_assert(cxx::is_integral_v<T>);                                      \
     T val = value;                                                             \
     T old;                                                                     \
                                                                                \
@@ -192,6 +197,7 @@ ATOMIC_LX_SX_VARIANTS(ATOMIC_LX_SX_CAS, 8, x)
   T                                                                            \
   _lse_atomic_##name##_fetch##order_name(T *mem, V value)                      \
   {                                                                            \
+    static_assert(cxx::is_integral_v<T>);                                      \
     T val = value;                                                             \
     T res;                                                                     \
                                                                                \

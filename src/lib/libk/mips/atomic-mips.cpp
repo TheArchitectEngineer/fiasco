@@ -10,6 +10,7 @@ INTERFACE [mips]:
   void                                                                         \
   atomic_##name##_relaxed(T *mem, V value)                                     \
   {                                                                            \
+    static_assert(cxx::is_integral_v<T>);                                      \
     T val = value;                                                             \
     Mword tmp;                                                                 \
                                                                                \
@@ -30,6 +31,7 @@ INTERFACE [mips]:
   T                                                                            \
   atomic_fetch_##name##_relaxed(T *mem, V value)                               \
   {                                                                            \
+    static_assert(cxx::is_integral_v<T>);                                      \
     T val = value;                                                             \
     T old;                                                                     \
     Mword tmp;                                                                 \
@@ -53,6 +55,7 @@ INTERFACE [mips]:
   T                                                                            \
   atomic_##name##_fetch_relaxed(T *mem, V value)                               \
   {                                                                            \
+    static_assert(cxx::is_integral_v<T>);                                      \
     T val = value;                                                             \
     T res;                                                                     \
     Mword tmp;                                                                 \
