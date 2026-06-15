@@ -23,7 +23,7 @@ endif
 else
 
 .PHONY: all do-all test-all config textconfig menuconfig xconfig \
-        oldconfig regenconfig mrproper doc help update nconfig \
+        oldconfig regenconfig mrproper doc help nconfig \
         savedefconfig listnewconfig oldnoconfig oldaskconfig FORCE
 
 all:
@@ -38,7 +38,6 @@ help:
 	@echo "  clean          - clear all auto-generated files in auto"
 	@echo "  cleanall       - like clean + dependencies"
 	@echo "  mrproper       - like cleanall + config files"
-	@echo "  update         - update Fiasco and preprocess using svn"
 	@echo "  DEPS           - dependencies between kernel object files"
 	@echo "  DEPS.ps        - graphical (ps) representation of DEPS"
 	@echo "  DEPS.svg       - graphical (svg) representation of DEPS"
@@ -326,10 +325,6 @@ mrproper: cleanall
 	$(VERBOSE)$(RM_R) auto docs config
 
 endif # clean, cleanall, mrproper
-
-update:
-	cd $(srcdir)/.. && svn update
-	cd $(dir $(PREPROCESS))/.. && svn update
 
 diag:
 	@echo "Collected diagnostics during build:"
