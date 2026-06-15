@@ -4,9 +4,9 @@ INTERFACE [mips]:
 #include "mem.h"
 
 // preprocess off
-#define ATOMIC_OP(name, op)                                                    \
+#define ATOMIC_OP_(name, op, size, suffix)                                     \
   template<typename T, typename V>                                             \
-  requires(sizeof(T) == sizeof(Mword)) inline                                  \
+  requires(sizeof(T) == size) inline                                           \
   void                                                                         \
   atomic_##name##_relaxed(T *mem, V value)                                     \
   {                                                                            \
@@ -16,9 +16,9 @@ INTERFACE [mips]:
     do                                                                         \
       {                                                                        \
         __asm__ __volatile__(                                                  \
-            ASM_LL " %[tmp], %[mem]  \n"                                       \
+            "ll"#suffix " %[tmp], %[mem]  \n"                                  \
             op    " %[tmp], %[val] \n"                                         \
-            ASM_SC " %[tmp], %[mem]  \n"                                       \
+            "sc"#suffix " %[tmp], %[mem]  \n"                                  \
             : [tmp] "=&r" (tmp), [mem] "+ZC" (*mem)                            \
             : [val] "Ir" (val));                                               \
       }                                                                        \
@@ -26,7 +26,7 @@ INTERFACE [mips]:
   }                                                                            \
                                                                                \
   template<typename T, typename V>                                             \
-  requires(sizeof(T) == sizeof(Mword)) inline                                  \
+  requires(sizeof(T) == size) inline                                           \
   T                                                                            \
   atomic_fetch_##name##_relaxed(T *mem, V value)                               \
   {                                                                            \
@@ -37,10 +37,10 @@ INTERFACE [mips]:
     do                                                                         \
       {                                                                        \
         __asm__ __volatile__(                                                  \
-            ASM_LL   " %[tmp], %[ptr]  \n"                                     \
+            "ll"#suffix " %[tmp], %[ptr]  \n"                                  \
             "move      %[old], %[tmp]  \n"                                     \
             op      " %[tmp], %[val]    \n"                                    \
-            ASM_SC   " %[tmp], %[ptr]  \n"                                     \
+            "sc"#suffix " %[tmp], %[ptr]  \n"                                  \
             : [tmp] "=&r" (tmp), [ptr] "+ZC" (*mem), [old] "=&r"(old)          \
             : [val] "Ir" (val));                                               \
       }                                                                        \
@@ -49,7 +49,7 @@ INTERFACE [mips]:
   }                                                                            \
                                                                                \
   template<typename T, typename V>                                             \
-  requires(sizeof(T) == sizeof(Mword)) inline                                  \
+  requires(sizeof(T) == size) inline                                           \
   T                                                                            \
   atomic_##name##_fetch_relaxed(T *mem, V value)                               \
   {                                                                            \
@@ -60,19 +60,26 @@ INTERFACE [mips]:
     do                                                                         \
       {                                                                        \
         __asm__ __volatile__(                                                  \
-            ASM_LL   " %[tmp], %[ptr]  \n"                                     \
+            "ll"#suffix " %[tmp], %[ptr]  \n"                                  \
             op      " %[tmp], %[val]    \n"                                    \
             "move      %[res], %[tmp]  \n"                                     \
-            ASM_SC   " %[tmp], %[ptr]  \n"                                     \
+            "sc"#suffix " %[tmp], %[ptr]  \n"                                  \
             : [tmp] "=&r" (tmp), [ptr] "+ZC" (*mem), [res] "=&r"(res)          \
             : [val] "Ir" (val));                                               \
       }                                                                        \
     while (!tmp);                                                              \
     return res;                                                                \
   }
+
+#define ATOMIC_OP(name, op)                                                    \
+  ATOMIC_OP_(name, op, 4,  )                                                   \
+  ATOMIC_OP_(name, op, 8, d)
+
 ATOMIC_OP(or, "or")
 ATOMIC_OP(and, "and")
-ATOMIC_OP(add, ASM_ADDU)
+ATOMIC_OP_(add, "addu", 4,  )
+ATOMIC_OP_(add, "daddu", 8, d)
+#undef ATOMIC_OP_
 #undef ATOMIC_OP
 // preprocess on
 
@@ -146,58 +153,66 @@ atomic_store_seq_cst(T *mem, V value)
   Mem::mp_mb();
 }
 
-template<typename T, typename V>
-requires(sizeof(T) == sizeof(Mword)) inline
-T
-atomic_exchange_relaxed(T *mem, V value)
-{
-  T val = value;
-  T old;
-  Mword tmp;
-
-  do
-    {
-      __asm__ __volatile__(
-          ASM_LL   " %[old], %[ptr]  \n"
-          "move      %[tmp], %[val]  \n"
-          ASM_SC   " %[tmp], %[ptr]  \n"
-          : [tmp] "=&r" (tmp), [ptr] "+ZC" (*mem), [old] "=&r"(old)
-          : [val] "r" (val));
-    }
-  while (!tmp);
-  return old;
-}
-
-template<typename T>
-requires(sizeof(T) == sizeof(Mword)) inline NEEDS["asm_mips.h"]
-bool
-cas_relaxed(T *mem, T oldval, T newval)
-{
-  T ret;
-
-  __asm__ __volatile__(
-      "     .set    push                \n"
-      "     .set    noat    #CAS        \n"
-      "     .set    noreorder           \n"
-      "1:   " ASM_LL " %[ret], %[mem]   \n"
-      "     bne     %[ret], %z[old], 2f \n"
-      "       move $1, %z[newval]       \n"
-      "     " ASM_SC " $1, %[mem]       \n"
-      "     beqz    $1, 1b              \n"
-      "       nop                       \n"
-      "2:                               \n"
-      "     .set    pop                 \n"
-      : [ret] "=&r" (ret), [mem] "+ZC" (*mem)
-      : [old] "Jr" (oldval), [newval] "Jr" (newval)
-      : "memory"); // for some unknown reason this is necessary for newer
-                   // gcc compilers
-
-  // true is ok
-  // false is failed
-  return ret == oldval;
-}
-
 // preprocess off
+#define ATOMIC_EXCHANGE(size, suffix)                                          \
+  template<typename T, typename V>                                             \
+  requires(sizeof(T) == size) inline                                           \
+  T                                                                            \
+  atomic_exchange_relaxed(T *mem, V value)                                     \
+  {                                                                            \
+    T val = value;                                                             \
+    T old;                                                                     \
+    Mword tmp;                                                                 \
+                                                                               \
+    do                                                                         \
+      {                                                                        \
+        __asm__ __volatile__(                                                  \
+            "ll"#suffix " %[old], %[ptr]  \n"                                  \
+            "move      %[tmp], %[val]     \n"                                  \
+            "sc"#suffix " %[tmp], %[ptr]  \n"                                  \
+            : [tmp] "=&r" (tmp), [ptr] "+ZC" (*mem), [old] "=&r"(old)          \
+            : [val] "r" (val));                                                \
+      }                                                                        \
+    while (!tmp);                                                              \
+    return old;                                                                \
+  }
+ATOMIC_EXCHANGE(4,  )
+ATOMIC_EXCHANGE(8, d)
+#undef ATOMIC_EXCHANGE
+
+#define ATOMIC_CAS(size, suffix)                                               \
+  template<typename T>                                                         \
+  requires(sizeof(T) == size) inline                                           \
+  bool                                                                         \
+  cas_relaxed(T *mem, T oldval, T newval)                                      \
+  {                                                                            \
+    T ret;                                                                     \
+                                                                               \
+    __asm__ __volatile__(                                                      \
+        "     .set    push                \n"                                  \
+        "     .set    noat    #CAS        \n"                                  \
+        "     .set    noreorder           \n"                                  \
+        "1:   ll"#suffix " %[ret], %[mem] \n"                                  \
+        "     bne     %[ret], %z[old], 2f \n"                                  \
+        "       move $1, %z[newval]       \n"                                  \
+        "     sc"#suffix " $1, %[mem]     \n"                                  \
+        "     beqz    $1, 1b              \n"                                  \
+        "       nop                       \n"                                  \
+        "2:                               \n"                                  \
+        "     .set    pop                 \n"                                  \
+        : [ret] "=&r" (ret), [mem] "+ZC" (*mem)                                \
+        : [old] "Jr" (oldval), [newval] "Jr" (newval)                          \
+        : "memory"); /* for some unknown reason this is necessary for newer */ \
+                     /* gcc compilers */                                       \
+                                                                               \
+    /* true is ok */                                                           \
+    /* false is failed */                                                      \
+    return ret == oldval;                                                      \
+  }
+ATOMIC_CAS(4,  )
+ATOMIC_CAS(8, d)
+#undef ATOMIC_CAS
+
 #define WRAP_ATOMIC_OP_VOID(name, order, pre, post)                            \
   template<typename T, typename V>  inline                                     \
   void                                                                         \
