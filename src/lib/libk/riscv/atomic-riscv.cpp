@@ -66,11 +66,10 @@ ATOMIC_STORE_OP(_seq_cst, "fence rw, w", "fence rw, rw", "memory")
   atomic_##op##order_name(T *mem, V value)                                     \
   {                                                                            \
     T val = value;                                                             \
-    T prev;                                                                    \
                                                                                \
     asm volatile (                                                             \
-      "amo" #op "." #suffix #order " %[prev], %[mask], %[mem]"                 \
-      : [prev]"=r" (prev), [mem]"+A"(*mem)                                     \
+      "amo" #op "." #suffix #order " zero, %[mask], %[mem]"                    \
+      : [mem]"+A"(*mem)                                                        \
       : [mask]"r" (val)                                                        \
       : cl);                                                                   \
   }
