@@ -248,7 +248,7 @@ T
 atomic_load_relaxed(T const *p)
 {
   T res;
-  asm volatile ("ldr %0, %1" : "=&r" (res) : "m"(*p));
+  asm volatile ("ldr %0, %1" : "=r" (res) : "m"(*p));
   return res;
 }
 
@@ -270,7 +270,7 @@ T
 atomic_load_relaxed(T const *p)
 {
   T res;
-  asm volatile ("ldrd %0, %H0, %1" : "=&r" (res) : "m" (*p));
+  asm volatile ("ldrd %0, %H0, %1" : "=r" (res) : "m" (*p));
   return res;
 }
 
@@ -292,7 +292,7 @@ T
 atomic_load_relaxed(T const *p)
 {
   T res;
-  asm volatile ("ldrexd %0, %H0, [%1]" : "=&r" (res) : "r" (p), "Qo" (*p));
+  asm volatile ("ldrexd %0, %H0, [%1]" : "=r" (res) : "r" (p), "Qo" (*p));
   return res;
 }
 
