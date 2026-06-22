@@ -166,7 +166,13 @@ struct Utest
     void operator()(T *s) const
     {
       if (s)
-        slab_store->lookup<T>(true)->del(s);
+        {
+          s->~T();
+          // catch use-after-free bugs
+          memset(reinterpret_cast<char *>(s), 0x85, sizeof(T));
+          // play safe and prevent the compiler from optimizing memset() away
+          slab_store->lookup<T>(true)->free(separate_lifetime(s));
+        }
     }
   };
 
