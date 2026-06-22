@@ -46,6 +46,10 @@ public:
     Maxinterval_us  = Maxinterval_mct / (Mct_freq / 1000000),
   };
 
+  static unsigned timer_interval()
+  {
+    return Mct_freq / (1000000 / Config::scheduler_granularity()) / 2;
+  }
 };
 
 
@@ -83,7 +87,7 @@ Mct_core_timer::configure()
 {
   write<Mword>(1, Reg::L_TCNTB);
   wstat_poll(1);
-  set_interval(Mct_freq / (1000000 / Config::scheduler_granularity()) / 2);
+  set_interval(timer_interval());
 
   // run timer
   write<Mword>(1, Reg::L_TCON);

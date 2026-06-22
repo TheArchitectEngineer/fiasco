@@ -110,7 +110,7 @@ PUBLIC static
 void
 Timer::periodic_default_freq(Cpu_number cpu)
 {
-  timers.cpu(cpu)->set_interval(Interval);
+  timers.cpu(cpu)->set_interval(timer_interval());
 }
 
 IMPLEMENT_OVERRIDE inline NEEDS["config.h"]
