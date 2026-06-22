@@ -237,6 +237,14 @@ public:
   Node *lower_bound_node(Key_param_type key) const;
 
   /**
+   * Find the last node with a key less than or equal to the given `key`.
+   *
+   * \param key  The key used for the search.
+   * \return A pointer to the found node, or `NULL` if no node was found.
+   */
+  Node *last_less_equal_node(Key_param_type key) const;
+
+  /**
    * \brief find the node with the given \a key.
    * \param key The key value of the element to search.
    * \return A valid iterator for the node with the given \a key,
@@ -310,6 +318,25 @@ Bst<Node, Get_key, Compare>::lower_bound_node(Key_param_type key) const
 	return static_cast<Node*>(q);
     }
   return static_cast<Node*>(r);
+}
+
+template< typename Node, typename Get_key, class Compare>
+inline
+Node *
+Bst<Node, Get_key, Compare>::last_less_equal_node(Key_param_type key) const
+{
+  Dir d;
+  Bst_node *l = nullptr;
+
+  for (Bst_node *q = _head; q; q = Bst_node::next(q, d))
+    {
+      d = dir(key, q);
+      if (d == Dir::R)
+        l = q; // found a node lower than key
+      else if (d == Dir::N)
+        return static_cast<Node*>(q);
+    }
+  return static_cast<Node*>(l);
 }
 
 /* find an element */
