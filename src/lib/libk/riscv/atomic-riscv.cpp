@@ -186,6 +186,8 @@ ATOMIC_CAS_OP(_seq_cst, .aqrl, .rl, "memory")
 //----------------------------------------------------------------------------
 IMPLEMENTATION [riscv]:
 
+#include "mem.h"
+
 inline
 void
 local_atomic_and(Mword *mem, Mword value)
@@ -207,9 +209,12 @@ local_atomic_add(Mword *mem, Mword value)
   atomic_add_relaxed(mem, value);
 }
 
-template<typename T> inline
+template<typename T> inline NEEDS["mem.h"]
 bool
 local_cas(T *mem, T oldval, T newval)
 {
-  return cas_relaxed(mem, oldval, newval);
+  Mem::barrier();
+  bool res = cas_relaxed(mem, oldval, newval);
+  Mem::barrier();
+  return res;
 }

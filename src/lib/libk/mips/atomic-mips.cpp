@@ -301,4 +301,9 @@ local_atomic_add(Mword *mem, Mword value)
 template<typename T> inline
 bool
 local_cas(T *mem, T oldval, T newval)
-{ return cas_relaxed(mem, oldval, newval); }
+{
+  Mem::barrier();
+  bool res = cas_relaxed(mem, oldval, newval);
+  Mem::barrier();
+  return res;
+}

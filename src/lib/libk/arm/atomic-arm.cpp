@@ -45,10 +45,17 @@ local_atomic_or(Mword *mem, Mword value)
 //---------------------------------------------------------------------------
 IMPLEMENTATION [arm && arm_v6plus]:
 
-template<typename T> inline
+#include "mem.h"
+
+template<typename T> inline NEEDS["mem.h"]
 bool
 local_cas(T *mem, T oldval, T newval)
-{ return cas_relaxed(mem, oldval, newval); }
+{
+  Mem::barrier();
+  bool res = cas_relaxed(mem, oldval, newval);
+  Mem::barrier();
+  return res;
+}
 
 inline
 void
