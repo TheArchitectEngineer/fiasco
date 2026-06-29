@@ -1296,6 +1296,20 @@ Utest::kmem_create_clear(A&&... args)
   return kmem_create_fill<T, 0x00, A...>(cxx::forward<A>(args)...);
 }
 
+/**
+ * Delete an object allocated via one of the Utest::kmem_create() variants.
+ *
+ * Helpful in cases were the cxx::unique_ptr returned by Utest::kmem_create() is
+ * released into a raw pointer, for example to store it in a intrusive list.
+ */
+PUBLIC
+template <typename T>
+static void
+Utest::kmem_delete(T *object)
+{
+  Utest::Deleter<T>()(object);
+}
+
 IMPLEMENT_DEFAULT
 Unsigned64
 Utest::timer_interrupt_indicator()
