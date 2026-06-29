@@ -345,7 +345,7 @@ cas_relaxed(T *m, T o, T n)
      "2:                           \n"
      : [tmp] "=&r" (tmp), [res] "=&r" (res), "+m" (*m)
      : [n] "r" (n), [m] "r" (m), [o] "r" (o)
-     : "cc", "memory");
+     : "cc");
 
   // res == 0 is ok
   // res == 1 is failed

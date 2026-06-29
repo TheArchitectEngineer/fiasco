@@ -204,9 +204,7 @@ ATOMIC_EXCHANGE(8, d)
         "2:                               \n"                                  \
         "     .set    pop                 \n"                                  \
         : [ret] "=&r" (ret), [mem] "+ZC" (*mem)                                \
-        : [old] "Jr" (oldval), [newval] "Jr" (newval)                          \
-        : "memory"); /* for some unknown reason this is necessary for newer */ \
-                     /* gcc compilers */                                       \
+        : [old] "Jr" (oldval), [newval] "Jr" (newval));                        \
                                                                                \
     /* true is ok */                                                           \
     /* false is failed */                                                      \
