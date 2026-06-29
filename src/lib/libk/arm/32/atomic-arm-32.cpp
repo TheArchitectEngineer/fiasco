@@ -328,7 +328,8 @@ template<typename T> requires(sizeof(T) == 4) inline
 bool
 cas_relaxed(T *m, T o, T n)
 {
-  T tmp, res;
+  T tmp;
+  Mword res;
 
   asm volatile
     ("mov     %[res], #1           \n"
