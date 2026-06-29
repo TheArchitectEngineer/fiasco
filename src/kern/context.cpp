@@ -1561,6 +1561,7 @@ Context::xcpu_state_change(Mword mask, Mword add, bool lazy_q = false)
  *
  * This function enqueues a DRQ and blocks the current context for a reply DRQ.
  *
+ * \pre         Interrupts must be disabled.
  * \pre         The DRQ request must not belong to the target context, i.e.
  *              `drq.context() != this`.
  *
