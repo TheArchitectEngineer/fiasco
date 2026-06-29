@@ -271,7 +271,7 @@ public:
  * The meaning of the bits in detail:
  *
  * - Bit 0 (`fwd`): If `fwd` is unset, the task of the receiving thread is
- *   implicitly the destination task for any received capabilites. If the `fwd`
+ *   implicitly the destination task for any received capabilities. If the `fwd`
  *   bit is set, the received capabilities are forwarded to the destination task
  *   explicitly selected via the capability index in the second or third word of
  *   the buffer item (`fwd cap idx`).
