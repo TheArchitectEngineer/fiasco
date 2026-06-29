@@ -1,14 +1,11 @@
 IMPLEMENTATION [arm && !arm_v6plus]:
 
-// ``unsafe'' stands for no safety according to the size of the given type.
-// There are type safe versions of the cas operations in the architecture
-// independent part of atomic that use the unsafe versions and make a type
-// check.
-
-inline
+template<typename T> inline
 bool
-local_cas_unsafe(Mword *ptr, Mword oldval, Mword newval)
+local_cas(T *mem, T oldval, T newval)
 {
+  static_assert(sizeof(T) == sizeof(Mword));
+
   Mword ret;
   asm volatile("    mrs    r5, cpsr    \n"
                "    mov    r6,r5       \n"
@@ -22,7 +19,7 @@ local_cas_unsafe(Mword *ptr, Mword oldval, Mword newval)
                "    movne  %0, #0      \n"
                "    msr    cpsr_c, r5  \n"
                : "=r" (ret)
-               : "r"  (ptr), "r" (oldval), "r" (newval)
+               : "r"  (mem), "r" (oldval), "r" (newval)
                : "r5", "r6", "memory");
   return ret;
 }
@@ -48,10 +45,10 @@ local_atomic_or(Mword *mem, Mword value)
 //---------------------------------------------------------------------------
 IMPLEMENTATION [arm && arm_v6plus]:
 
-inline
+template<typename T> inline
 bool
-local_cas_unsafe(Mword *ptr, Mword oldval, Mword newval)
-{ return cas_relaxed(ptr, oldval, newval); }
+local_cas(T *mem, T oldval, T newval)
+{ return cas_relaxed(mem, oldval, newval); }
 
 inline
 void

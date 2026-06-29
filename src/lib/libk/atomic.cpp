@@ -11,13 +11,6 @@ local_atomic_or(Mword *mem, Mword value);
 void
 local_atomic_add(Mword *mem, Mword value);
 
-// ``unsafe'' stands for no safety according to the size of the given type.
-// There are type safe versions of the cas operations in the architecture
-// independent part of atomic that use the unsafe versions and make a type
-// check.
-bool
-local_cas_unsafe(Mword *ptr, Mword oldval, Mword newval);
-
 //---------------------------------------------------------------------------
 IMPLEMENTATION:
 
@@ -27,26 +20,14 @@ IMPLEMENTATION:
  * contains a dedicated value. For the variant with protection against
  * concurrent writes from other CPUs, \see cas().
  *
- * \param ptr     Pointer to the memory to change.
+ * \param mem     Pointer to the memory to change.
  * \param oldval  Only write 'newval' if the memory contains this value.
  * \param newval  Write this value if the memory contains 'oldval'.
  * \return True if the memory was written, false otherwise.
  */
 template< typename Type > inline
 bool
-local_cas(Type *ptr, Type oldval, Type newval)
-{
-  static_assert(sizeof(Type) == sizeof(Mword));
-
-  if constexpr (cxx::is_pointer_v<Type>)
-    return local_cas_unsafe(reinterpret_cast<Mword *>(ptr),
-                            reinterpret_cast<Mword>(oldval),
-                            reinterpret_cast<Mword>(newval));
-  else
-    return local_cas_unsafe(reinterpret_cast<Mword *>(ptr),
-                            static_cast<Mword>(oldval),
-                            static_cast<Mword>(newval));
-}
+local_cas(Type *mem, Type oldval, Type newval);
 
 /**
  * Atomically change certain bits of memory \c without protection against

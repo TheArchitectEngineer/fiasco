@@ -270,20 +270,17 @@ local_atomic_or(Mword *mem, Mword value)
   asm volatile ("orq %1, %2" : "=m"(*mem) : "er"(value), "m"(*mem));
 }
 
-// ``unsafe'' stands for no safety according to the size of the given type.
-// There are type safe versions of the cas operations in the architecture
-// independent part of atomic that use the unsafe versions and make a type
-// check.
-
-inline
+template<typename T> inline
 bool
-local_cas_unsafe(Mword *ptr, Mword cmpval, Mword newval)
+local_cas(T *mem, T oldval, T newval)
 {
+  static_assert(sizeof(T) == sizeof(Mword));
+
   Mword oldval_ignore, zflag;
 
-  asm volatile ("cmpxchgq %[newval], %[ptr]"
+  asm volatile ("cmpxchgq %[newval], %[mem]"
                 : "=a"(oldval_ignore), "=@ccz"(zflag)
-                : [newval]"r"(newval), [ptr]"m"(*ptr), "a"(cmpval)
+                : [newval]"r"(newval), [mem]"m"(*mem), "a"(oldval)
                 : "memory");
 
   return zflag;

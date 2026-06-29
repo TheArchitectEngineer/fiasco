@@ -207,14 +207,9 @@ local_atomic_add(Mword *mem, Mword value)
   atomic_add_relaxed(mem, value);
 }
 
-// ``unsafe'' stands for no safety according to the size of the given type.
-// There are type safe versions of the cas operations in the architecture
-// independent part of atomic that use the unsafe versions and make a type
-// check.
-
-inline
+template<typename T> inline
 bool
-local_cas_unsafe(Mword *ptr, Mword oldval, Mword newval)
+local_cas(T *mem, T oldval, T newval)
 {
-  return cas_relaxed(ptr, oldval, newval);
+  return cas_relaxed(mem, oldval, newval);
 }
