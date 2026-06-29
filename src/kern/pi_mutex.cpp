@@ -1,8 +1,13 @@
 IMPLEMENTATION [prio_inherit]:
 
+#include "atomic.h"
 #include "kmem_slab.h"
 #include "kobject_dbg.h"
 #include "kobject_helper.h"
+#include "kobject_rpc.h"
+#include "task.h"
+#include "thread_state.h"
+#include "timer.h"
 #include "warn.h"
 
 JDB_DEFINE_TYPENAME(Pi_mutex, "PI Mutex");
