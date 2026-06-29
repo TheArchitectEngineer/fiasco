@@ -1248,7 +1248,8 @@ Utest::kmem_create_fill(A&&... args)
   if (p)
     {
       memset(p, FILL, sizeof(T));
-      Mem::barrier(); // prevent the compiler from optimizing memset() away
+      // prevent the compiler from optimizing memset() away
+      p = separate_lifetime(p);
       new (p) T(cxx::forward<A>(args)...);
     }
   return cxx::unique_ptr<T, Utest::Deleter<T>>(static_cast<T *>(p));
