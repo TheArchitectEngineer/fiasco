@@ -241,7 +241,7 @@ public:
  *     │   SBZ (should be zero)   │ 1 │   0    │   0   │ fwd │
  *     └──────────────────────────┴───┴────────┴───────┴─────┘
  *
- * If `small` is set, the most significant bits are layouted as follows:
+ * If `small` is set, the most significant bits are arranged as follows:
  *
  *      MSB        12 11         4  3      2       1      0    bits
  *     ┌─────────────┬────────────┬───┬────────┬───────┬─────┐
