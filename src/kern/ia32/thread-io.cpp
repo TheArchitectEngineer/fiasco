@@ -231,7 +231,7 @@ Thread::handle_io_fault(Trap_state *ts)
           //
           // This must be done while interrupts are off to prevent that an
           // other thread sets the flag again.
-          state_del(Thread_cancel);
+          state_del_dirty(Thread_cancel);
 
           // Set CR2 in ts so that we also get the io_page value in an
           // consecutive exception

@@ -132,7 +132,7 @@ void
 Thread::handle_svc(Trap_state *ts)
 {
   Mword state = this->state();
-  state_del(Thread_cancel);
+  state_del_dirty(Thread_cancel);
   if (state & (Thread_vcpu_user | Thread_alien))
     {
       if constexpr (TAG_ENABLED(alien))

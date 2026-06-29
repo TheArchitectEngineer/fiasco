@@ -429,7 +429,8 @@ Ipc_gate::block(Thread *ct, L4_timeout const &to, Utcb *u)
 
   ct->schedule();
 
-  Mword state = ct->state_change(~Thread_full_ipc_mask, Thread_ready);
+  Mword state = ct->state();
+  ct->state_change_dirty(~Thread_full_ipc_mask, Thread_ready);
   ct->reset_timeout();
 
   if (!ct->wait_queue()) [[unlikely]]

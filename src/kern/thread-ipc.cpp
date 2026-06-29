@@ -840,7 +840,7 @@ Thread::do_ipc_receive(bool have_receive, Thread *partner, Sender *sender,
       else
         regs->tag(commit_error(utcb, L4_error::R_timeout, regs->tag()));
     }
-  state_del(Thread_full_ipc_mask);
+  state_del_dirty(Thread_full_ipc_mask);
 }
 
 /**
@@ -945,11 +945,11 @@ Thread::exception(Kobject_iface *handler, Trap_state *ts, L4_fpage::Rights right
 
   saved_state.restore(utcb);
 
-  state_del(Thread_in_exception);
+  state_del_dirty(Thread_in_exception);
   if constexpr (TAG_ENABLED(alien))
     if (!r.tag().has_error()
         && r.tag().proto() == L4_msg_tag::Label_allow_syscall)
-      state_add(Thread_dis_alien);
+      state_add_dirty(Thread_dis_alien);
 
   // restore original utcb_handler
   _utcb_handler = old_utcb_handler;
@@ -1024,7 +1024,7 @@ Thread::send_exception(Trap_state *ts)
       handler = this; // block on ourselves
     }
 
-  state_change(~Thread_cancel, Thread_in_exception);
+  state_change_dirty(~Thread_cancel, Thread_in_exception);
 
   return exception(handler, ts, rights);
 }

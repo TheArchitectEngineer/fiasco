@@ -1596,13 +1596,13 @@ Context::drq(Drq *drq, Drq::Request_func *func, void *arg,
   drq->func = func;
   drq->arg = arg;
   if (wait == Drq::Wait)
-    cur->state_add(Thread_drq_wait);
+    cur->state_add_dirty(Thread_drq_wait);
 
   enqueue_drq(drq);
 
   while (wait == Drq::Wait && cur->state() & Thread_drq_wait)
     {
-      cur->state_del(Thread_ready_mask);
+      cur->state_del_dirty(Thread_ready_mask);
       cur->schedule();
     }
 
@@ -2074,7 +2074,7 @@ Context::Pending_rqq::handle_requests(Context **mq)
       if (c->drq_pending()) [[likely]]
         {
           if (c != curr) [[likely]]
-            c->state_add(Thread_drq_ready);
+            c->state_add_dirty(Thread_drq_ready);
           else
             resched |= c->handle_drq();
         }

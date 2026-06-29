@@ -222,7 +222,7 @@ Thread::pagefault_entry(const Mword pfa, Mword error_code,
       // TODO: Avoid calling Thread::map_fsr_user here every time!
       if (t->vcpu_pagefault(pfa, Thread::map_fsr_user(error_code), pc))
         return 1;
-      t->state_del(Thread_cancel);
+      t->state_del_dirty(Thread_cancel);
     }
 
   bool release_cpulock = false;
@@ -752,7 +752,7 @@ Thread::arm_esr_entry(Trap_state *ts)
 
     case 0x00: // Unknown reason, undefined opcode with HCR.TGE=1
         {
-          ct->state_del(Thread_cancel);
+          ct->state_del_dirty(Thread_cancel);
           state = ct->state();
 
           if (state & (Thread_vcpu_user | Thread_alien))

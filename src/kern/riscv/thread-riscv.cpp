@@ -415,7 +415,7 @@ int
 Thread::handle_ecall(Trap_state *ts)
 {
   Mword state = this->state();
-  state_del(Thread_cancel);
+  state_del_dirty(Thread_cancel);
 
   if (state & (Thread_vcpu_user | Thread_alien))
     {
