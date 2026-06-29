@@ -253,21 +253,21 @@ inline
 void
 local_atomic_add(Mword *mem, Mword value)
 {
-  asm volatile ("addq %1, %2" : "=m"(*mem) : "er"(value), "m"(*mem));
+  asm volatile ("addq %1, %2" : "=m"(*mem) : "er"(value), "m"(*mem) : "memory");
 }
 
 inline
 void
 local_atomic_and(Mword *mem, Mword value)
 {
-  asm volatile ("andq %1, %2" : "=m"(*mem) : "er"(value), "m"(*mem));
+  asm volatile ("andq %1, %2" : "=m"(*mem) : "er"(value), "m"(*mem) : "memory");
 }
 
 inline
 void
 local_atomic_or(Mword *mem, Mword value)
 {
-  asm volatile ("orq %1, %2" : "=m"(*mem) : "er"(value), "m"(*mem));
+  asm volatile ("orq %1, %2" : "=m"(*mem) : "er"(value), "m"(*mem) : "memory");
 }
 
 template<typename T> inline

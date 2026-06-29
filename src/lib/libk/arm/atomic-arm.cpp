@@ -57,12 +57,20 @@ local_cas(T *mem, T oldval, T newval)
   return res;
 }
 
-inline
+inline NEEDS["mem.h"]
 void
 local_atomic_or(Mword *mem, Mword value)
-{ atomic_or_relaxed(mem, value); }
+{
+  Mem::barrier();
+  atomic_or_relaxed(mem, value);
+  Mem::barrier();
+}
 
-inline
+inline NEEDS["mem.h"]
 void
 local_atomic_and(Mword *mem, Mword value)
-{ atomic_and_relaxed(mem, value); }
+{
+  Mem::barrier();
+  atomic_and_relaxed(mem, value);
+  Mem::barrier();
+}

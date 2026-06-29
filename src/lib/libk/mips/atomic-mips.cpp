@@ -281,21 +281,27 @@ inline
 void
 local_atomic_and(Mword *mem, Mword value)
 {
+  Mem::barrier();
   atomic_and_relaxed<Mword, Mword>(mem, value);
+  Mem::barrier();
 }
 
 inline
 void
 local_atomic_or(Mword *mem, Mword value)
 {
+  Mem::barrier();
   atomic_or_relaxed<Mword, Mword>(mem, value);
+  Mem::barrier();
 }
 
 inline
 void
 local_atomic_add(Mword *mem, Mword value)
 {
+  Mem::barrier();
   atomic_add_relaxed<Mword, Mword>(mem, value);
+  Mem::barrier();
 }
 
 template<typename T> inline

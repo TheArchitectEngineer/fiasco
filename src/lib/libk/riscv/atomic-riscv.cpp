@@ -188,25 +188,31 @@ IMPLEMENTATION [riscv]:
 
 #include "mem.h"
 
-inline
+inline NEEDS["mem.h"]
 void
 local_atomic_and(Mword *mem, Mword value)
 {
+  Mem::barrier();
   atomic_and_relaxed(mem, value);
+  Mem::barrier();
 }
 
-inline
+inline NEEDS["mem.h"]
 void
 local_atomic_or(Mword *mem, Mword value)
 {
+  Mem::barrier();
   atomic_or_relaxed(mem, value);
+  Mem::barrier();
 }
 
-inline
+inline NEEDS["mem.h"]
 void
 local_atomic_add(Mword *mem, Mword value)
 {
+  Mem::barrier();
   atomic_add_relaxed(mem, value);
+  Mem::barrier();
 }
 
 template<typename T> inline NEEDS["mem.h"]
