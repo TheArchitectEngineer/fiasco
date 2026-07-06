@@ -533,6 +533,19 @@ atomic_exchange_relaxed(T *mem, V value)
   return old;
 }
 
+template<typename T>
+requires(sizeof(T) == 4) inline
+bool
+cas_relaxed(T *mem, T oldval, T newval)
+{
+  Proc::Status s = Proc::cli_save();
+  bool success = *mem == oldval;
+  if (success)
+    *mem = newval;
+  Proc::sti_restore(s);
+  return success;
+}
+
 #define WRAP_ATOMIC_OP_VOID(name, order)                                       \
   template<typename T, typename V>  inline                                     \
   void                                                                         \
