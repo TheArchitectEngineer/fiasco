@@ -212,3 +212,13 @@ void
 Io_space::switchin_context(Space *)
 {
 }
+
+// ---------------------------------------------------------------------------
+INTERFACE [prio_inherit]:
+
+EXTENSION class Space
+{
+public:
+  /// Per-task lock that protects the PI waiter chain data structures.
+  Spin_lock<> pi_chain_lock;
+};

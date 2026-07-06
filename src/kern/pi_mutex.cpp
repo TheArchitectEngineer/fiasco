@@ -126,11 +126,6 @@ private:
     }
   };
 
-  /// Global lock that protects the PI waiter chain data structures.
-  /// \note Lock order: Always take Pi_mutex specific lock first, then global PI
-  ///       chain lock.
-  static Global_data<Spin_lock<>> _pi_chain_lock;
-
   /// Indicates that the mutex is in slow path, there might be (pending) waiters.
   /// The kernel clears this flag when it transitions the mutex into fast path,
   /// i.e. when a thread releases the mutex and its waiters queue is empty.
@@ -147,6 +142,18 @@ private:
   static constexpr unsigned Max_prio_chain_depth = 128;
   /// No early exits when walking PI chain, to detect deadlocks.
   static constexpr bool Detect_deadlocks = true;
+
+  /**
+   * The pi_chain_lock protects the PI waiter chain data structures.
+   * Since a Pi_mutex cannot be shared between tasks, it can be a per-task lock
+   * (instead of a global lock). To ensure that the correct pi_chain_lock is
+   * used, we check at the start of sys_(un)lock() that the task the PI mutex is
+   * bound to is the same as the task of the calling thread.
+   */
+  Spin_lock<> &pi_chain_lock()
+  {
+    return _space->pi_chain_lock;
+  }
 
   /// Allocation quota.
   Ram_quota *_quota;
@@ -171,7 +178,7 @@ private:
    * The kernel-user memory is only freed in the destructor of the task.
    *
    * The kernel does not use _ku_status for internal synchronization. It
-   * instead uses the _pi_chain_lock Spin_lock to protect the state of the
+   * instead uses the pi_chain_lock Spin_lock to protect the state of the
    * Pi_mutex. That already ensures that the memory ordering semantics of the
    * mutex expected by user-space are upheld. However, there are two edge cases,
    * where the correct semantics of the CAS on _ku_status are important:
@@ -190,7 +197,7 @@ private:
 
   /**
    * Protects state of Pi_mutex.
-   * NOTE: Unused for now, we rely on the _pi_chain_lock, as with our current
+   * NOTE: Unused for now, we rely on the pi_chain_lock, as with our current
    * algorithm, we need to have a consistent view of all Thread::_pi_* members,
    * Pi_mutex::_owner and Pi_mutex::_waiters.
    * Spin_lock<> _lock;
@@ -244,18 +251,10 @@ private:
   }
 };
 
-// OPTIMIZE: This lock doesn't have to be global, it can be per task actually,
-// since Pi_mutex cannot be shared between tasks. Mhm, well actually it can be
-// mapped to another task. But if we would prevent mappings of Pi_mutex...
-// Or alternatively check at the start of sys_(un)lock() that the task the PI
-// mutex is bound to is the same as the task of the calling thread.
-// OPTIMIZE: Would it make sense to make this a Switch_lock?
-DEFINE_GLOBAL Global_data<Spin_lock<>> Pi_mutex::_pi_chain_lock;
-
 /**
  * Enqueue thread into waiter list of this mutex.
  *
- * \pre _pi_chain_lock must be held.
+ * \pre pi_chain_lock must be held.
  */
 PRIVATE inline
 void
@@ -270,7 +269,7 @@ Pi_mutex::enqueue_waiter(Pi_mutex_waiter *waiter)
 /**
  * Dequeue thread from waiter list of this mutex.
  *
- * \pre _pi_chain_lock must be held.
+ * \pre pi_chain_lock must be held.
  */
 PRIVATE inline
 void
@@ -295,7 +294,7 @@ Pi_mutex::dequeue_waiter(Pi_mutex_waiter *waiter)
  * \retval false  Failed to set owner, it is dying or dead.
  *
  * \pre _owner == nullptr
- * \pre _pi_chain_lock must be held.
+ * \pre pi_chain_lock must be held.
  */
 PRIVATE inline
 bool
@@ -334,7 +333,7 @@ Pi_mutex::set_owner(Thread *owner, bool check_dead)
  * \return Counted reference the owner held of the mutex.
  *
  * \pre _owner != nullptr
- * \pre _pi_chain_lock must be held.
+ * \pre pi_chain_lock must be held.
  */
 PRIVATE inline
 Ref_ptr<Pi_mutex>
@@ -356,7 +355,7 @@ Pi_mutex::reset_owner()
  *
  * \return  Whether thread needs PI reschedule.
  *
- * \pre _pi_chain_lock must be held.
+ * \pre pi_chain_lock must be held.
  */
 PRIVATE
 bool
@@ -384,7 +383,7 @@ Pi_mutex::adjust_prio_on_acquire(Thread *thread)
  *
  * \return  Whether thread needs PI reschedule.
  *
- * \pre _pi_chain_lock must be held.
+ * \pre pi_chain_lock must be held.
  *
  * \note Does not access _owner field of the mutex.
  */
@@ -428,7 +427,7 @@ Pi_mutex::adjust_prio_on_release(Thread *thread)
  *
  * \return  Thread that needs PI reschedule, if any.
  *
- * \pre _pi_chain_lock must be held.
+ * \pre pi_chain_lock must be held.
  * \pre This mutex must be locked, i.e. _owner must be set.
  * \pre Waiter must already be enqueued with the correct priority in the
         _waiters list of this mutex.
@@ -454,7 +453,7 @@ Pi_mutex::adjust_prio_chain_on_start_wait(Thread *waiter, bool *deadlock)
  *
  * \return  Thread that needs PI reschedule, if any.
  *
- * \pre _pi_chain_lock must be held.
+ * \pre pi_chain_lock must be held.
  * \pre This mutex must be locked, i.e. _owner must be set.
  * \pre Waiter must already be dequeued.
  *
@@ -617,7 +616,7 @@ Pi_mutex::finish_walk_detect_deadlock(Thread *waiter,
  *
  * \return  Thread that needs PI reschedule, if any.
  *
- * \pre _pi_chain_lock must be held.
+ * \pre pi_chain_lock must be held.
  */
 PRIVATE
 Thread *
@@ -678,7 +677,7 @@ Pi_mutex::setup_wait_timer(Thread *waiter, L4_timeout timeout, Utcb const *utcb,
  * \retval true   On success.
  * \retval false  Fast path owner tid did not resolve to a Thread object.
  *
- * \pre _pi_chain_lock must be held.
+ * \pre pi_chain_lock must be held.
  */
 PRIVATE inline
 bool
@@ -778,7 +777,7 @@ Pi_mutex::wait_on_pi_mutex(Thread *self, Pi_mutex_waiter &self_waiter,
       unsigned short timeout_prio;
       {
         // Check under lock whether we own or wait on the mutex.
-        auto guard = lock_guard<No_cpu_lock_policy>(_pi_chain_lock.unwrap());
+        auto guard = lock_guard<No_cpu_lock_policy>(pi_chain_lock());
 
         // Check if we acquired the mutex, but the xcpu_pi_update_prio()
         // hasn't arrived yet.
@@ -820,6 +819,10 @@ Pi_mutex::sys_lock(L4_fpage::Rights, Syscall_frame *f, Utcb const *utcb)
 
   Thread *self = current_thread();
 
+  // PI mutex can only be used from the space it was bound to during creation.
+  if (self->space() != _space.get()) [[unlikely]]
+    return commit_result(-L4_err::EPerm);
+
   // OPTIMIZE: Since we hold a reference to Pi_mutex, we could handle the
   // -L4_err::EAgain cases below directly in the kernel, by adding a preemption
   // point and then retrying the operation, instead of returning the error to
@@ -842,7 +845,7 @@ Pi_mutex::sys_lock(L4_fpage::Rights, Syscall_frame *f, Utcb const *utcb)
   unsigned short fast_prio;
 
   {
-    auto guard = lock_guard<No_cpu_lock_policy>(_pi_chain_lock.unwrap());
+    auto guard = lock_guard<No_cpu_lock_policy>(pi_chain_lock());
 
     // Note: Read under lock (relaxed memory order).
     Mword old_value = atomic_load_relaxed(_ku_status);
@@ -928,7 +931,7 @@ Pi_mutex::sys_lock(L4_fpage::Rights, Syscall_frame *f, Utcb const *utcb)
                 if (chain_prio_updated == fast_prio_updated)
                   fast_prio_updated = nullptr;
 
-                // OPTIMIZE: Given that we hold the _pi_chain_lock, can it ever
+                // OPTIMIZE: Given that we hold the pi_chain_lock, can it ever
                 // be two different threads, and can we maybe even just drop or
                 // avoid the former PI chain walk?
               }
@@ -1003,13 +1006,17 @@ Pi_mutex::sys_unlock(L4_fpage::Rights, Syscall_frame *f, Utcb const *)
 
   Thread *self = current_thread();
 
+  // PI mutex can only be used from the space it was bound to during creation.
+  if (self->space() != _space.get()) [[unlikely]]
+    return commit_result(-L4_err::EPerm);
+
   Ref_ptr<Pi_mutex> released_ref;
   bool self_prio_updated;
   Thread *waiter = nullptr;
   unsigned short waiter_prio;
 
   {
-    auto guard = lock_guard<No_cpu_lock_policy>(_pi_chain_lock.unwrap());
+    auto guard = lock_guard<No_cpu_lock_policy>(pi_chain_lock());
 
     // User-space attempts to unlock mutex that is not locked.
     if (!_owner) [[unlikely]]
@@ -1099,7 +1106,7 @@ Pi_mutex::release_owner_on_kill(Context *self) override
 
   {
     // Check under lock whether we own or wait on the mutex.
-    auto guard = lock_guard<No_cpu_lock_policy>(_pi_chain_lock.unwrap());
+    auto guard = lock_guard<No_cpu_lock_policy>(pi_chain_lock());
 
     assert(_owner == self);
 
