@@ -25,6 +25,10 @@ set_fast_entry(Cpu_number, void (*func)())
     Mem_layout::Mem_layout::Kentry_cpu_syscall_entry + ofs);
   check(Jdb::poke(Jdb_addr<Signed32>::kmem_addr(reloc),
                   static_cast<Signed32>(reinterpret_cast<Signed64>(func))));
+  // syscall_entry_code is located within .text. With NX disabled, it is copied
+  // to the Kentry page. With NX enabled, it is mapped to the Kentry page.
+  if constexpr (TAG_ENABLED(kernel_nx))
+    Boot_info::reset_checksum_ro();
 }
 
 //--------------------------------------------------------------------------
