@@ -23,7 +23,6 @@ IMPLEMENTATION [arm]:
 #include "thread.h"
 #include "timer.h"
 #include "utcb_init.h"
-#include "alternatives.h"
 
 #include <cstdlib>
 #include <cstdio>
