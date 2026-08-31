@@ -25,7 +25,7 @@ IMPLEMENTATION:
  * \param newval  Write this value if the memory contains 'oldval'.
  * \return True if the memory was written, false otherwise.
  */
-template< typename Type > inline
+template< typename Type >
 bool
 local_cas(Type *mem, Type oldval, Type newval);
 
