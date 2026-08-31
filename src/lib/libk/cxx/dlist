@@ -372,7 +372,7 @@ public:
 
   bool empty() const { return C::next(&_h) == &_h; }
 
-  void remove(T *e) { Base::remove(e); }
+  static void remove(T *e) { Base::remove(e); }
   Iterator erase(Iterator const &e) { return Base::erase(e); }
 
   void clear()
