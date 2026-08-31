@@ -24,7 +24,7 @@ INTERFACE:
  *     └────────────────────────────┴───┴────────┘
  *
  * Bit 3 (`t`) is the type bit. If `t` is set, the item is a map item.
- * \note Fiasco.OC currently has no support for other types than map items.
+ * \note Fiasco currently has no support for other types than map items.
  *
  * There are three sub-types of typed message items with variations in the
  * layout of the first word:

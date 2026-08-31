@@ -391,7 +391,7 @@ public:
     /**
      * The sender wants to propagate an incoming call operation to a different
      * thread.
-     * \note Not implemented in Fiasco.OC.
+     * \note Not implemented in Fiasco.
      *
      * Propagation means that the reply capability shall be passed on to the
      * receiver of this message to enable a direct reply.
