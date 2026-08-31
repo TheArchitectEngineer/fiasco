@@ -29,6 +29,8 @@ struct D_list_item_policy
   typedef D_list_item Item;
   static constexpr D_list_item *&prev(D_list_item *e) { return e->_dli_prev; }
   static constexpr D_list_item *&next(D_list_item *e) { return e->_dli_next; }
+  static constexpr D_list_item *prev(D_list_item const *e) { return e->_dli_prev; }
+  static constexpr D_list_item *next(D_list_item const *e) { return e->_dli_next; }
 };
 
 template< typename T >
