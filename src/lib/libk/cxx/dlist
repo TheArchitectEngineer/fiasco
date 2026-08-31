@@ -36,7 +36,7 @@ struct Sd_list_head_policy
 {
   typedef T *Head_type;
   static constexpr T *head(Head_type h) { return h; }
-  static void constexpr set_head(Head_type &h, T *v) { h = v; }
+  static constexpr void set_head(Head_type &h, T *v) { h = v; }
 };
 
 template<
