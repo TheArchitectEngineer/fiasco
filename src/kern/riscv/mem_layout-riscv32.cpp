@@ -11,10 +11,10 @@ public:
   };
 
   enum Virt_layout_kern : Address {
-    Jdb_map_base          = 0xeac00000,
-    Jdb_tmp_map_area      = Jdb_map_base,
-    Tbuf_status_page      = Jdb_map_base + 0x200000,
-    Tbuf_buffer_area      = Jdb_map_base + 0x400000,
+    Jdb_map_base          = 0xea800000,
+    Jdb_tmp_map_area      = Jdb_map_base,            // superpage-aligned
+    Tbuf_status_page      = Jdb_map_base + 0x400000, // page-aligned
+    Tbuf_buffer_area      = Jdb_map_base + 0x800000, // page-aligned
     Tbuf_buffer_size      = 0x2000000,
 
     Mmio_map_start        = 0xee000000,
