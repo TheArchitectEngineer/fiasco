@@ -373,6 +373,7 @@ Slab_cache::reap()		// request that cache returns memory to system
 	  if (!s)
 	    break;
 
+          --_num_empty;
 	  cxx::H_list<Slab>::remove(s);
 	}
 
