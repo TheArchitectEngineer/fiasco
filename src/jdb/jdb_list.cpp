@@ -232,12 +232,9 @@ Jdb_list::show_line(Jdb_list::Line_buf *b)
 {
   Kconsole::console()->getchar_chance();
 
-  // our modified printf ignores the length argument if used with
-  // strings containing ESC-sequences
-  int s_len_visible = print_limit(b->begin(),
-                                  min<unsigned>(Jdb_screen::width(), b->length()));
-  b->begin()[s_len_visible] = 0;
-  printf("%s\033[K\n", b->begin());
+  int s_len_visible =
+    print_limit(b->begin(), min<unsigned>(Jdb_screen::width(), b->length()));
+  printf("%.*s\033[K\n", s_len_visible, b->begin());
 }
 
 PRIVATE
