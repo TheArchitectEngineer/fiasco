@@ -65,6 +65,9 @@ Mem_layout::add_pmem(Address phys, Address virt, unsigned long size)
   if (_num_pm_regions >= Max_pmem_regions)
     return false;
 
+  if (phys + size - 1 < phys || virt + size - 1 < virt)
+    return false;
+
   size--;
 
   // The pmem map must be unambiguous in either direction. Make sure nothing
