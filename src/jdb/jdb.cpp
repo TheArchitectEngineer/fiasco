@@ -1149,31 +1149,31 @@ Jdb::peek_or_poke_task(Jdb_address addr, T *value, size_t bytes)
   unsigned char *mem = access_mem_task(addr, do_write);
   if (!mem)
     return -1;
-  size_t bytes_to_copy = bytes;
-
+  size_t bytes_to_copy_1st = bytes;
   if (Pg::trunc(addr.addr()) != Pg::trunc(addr.addr() + bytes))
-    bytes_to_copy = Pg::round(addr.addr()) - addr.addr();
+    bytes_to_copy_1st = Pg::round(addr.addr()) - addr.addr();
   if constexpr (cxx::is_same_v<T, void>)
-    memcpy(value, mem, bytes_to_copy);
+    memcpy(value, mem, bytes_to_copy_1st);
   else
     {
-      memcpy(mem, value, bytes_to_copy);
-      Mem_unit::make_coherent_to_pou(mem, bytes_to_copy);
+      memcpy(mem, value, bytes_to_copy_1st);
+      Mem_unit::make_coherent_to_pou(mem, bytes_to_copy_1st);
     }
 
-  if (bytes_to_copy != bytes)
+  if (size_t bytes_to_copy_2nd = bytes - bytes_to_copy_1st)
     {
+      addr += bytes_to_copy_1st;
       mem = access_mem_task(addr, do_write);
       if (!mem)
         return -1;
-      addr += bytes_to_copy;
-      bytes_to_copy = bytes - bytes_to_copy;
+
+      auto *v = offset_cast<unsigned char *>(value, bytes_to_copy_1st);
       if constexpr (cxx::is_same_v<T, void>)
-        memcpy(value, mem, bytes_to_copy);
+        memcpy(v, mem, bytes_to_copy_2nd);
       else
         {
-          memcpy(mem, value, bytes_to_copy);
-          Mem_unit::make_coherent_to_pou(mem, bytes_to_copy);
+          memcpy(mem, v, bytes_to_copy_2nd);
+          Mem_unit::make_coherent_to_pou(mem, bytes_to_copy_2nd);
         }
     }
   return 0;
