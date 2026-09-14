@@ -580,7 +580,8 @@ struct Ia32_intel_microcode
       {
         // ignore `verbose`: print this warning for every CPU
         WARNX(Error,
-              "microcode not updated for CPU %x: Have rev %llx/%08llx (%04x-%02x-%02x)\n",
+              "microcode not updated for CPU %x: Running rev %llx/%08llx "
+              "(tried to update to %04x-%02x-%02x)\n",
               cpu_id, rev_sig >> 32, rev_sig,
               update->date_year, update->date_month, update->date_day);
         return false;
