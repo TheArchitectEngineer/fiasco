@@ -327,7 +327,7 @@ Gic_dist::sync_rwp(V3)
 IMPLEMENTATION [have_arm_gicv3 && mp]:
 
 PUBLIC inline
-Unsigned32
+Unsigned64
 Gic_dist::irouter(unsigned num)
 {
   if (is_espi(num))
