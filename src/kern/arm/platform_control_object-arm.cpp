@@ -19,8 +19,11 @@ Platform_control_object::sys_set_asid(Syscall_frame *f, Utcb const *in)
   if (!(rights & L4_fpage::Rights::CW()))
     return Kobject_iface::commit_result(-L4_err::EPerm);
 
-  task->asid(in->values[1]);
+  Mword asid = in->values[1];
+  if (asid >= Mem_unit::asid_num())
+    return commit_result(-L4_err::ERange);
 
+  task->asid(asid);
   return commit_result(0);
 }
 
