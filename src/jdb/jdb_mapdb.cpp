@@ -672,12 +672,18 @@ Jdb_obj_info_hdl::invoke(Kobject_common *, Syscall_frame *f, Utcb *utcb) overrid
   Mword size = utcb->values[2];
   Space::Ku_mem const *ku_mem =
     current()->space()->find_ku_mem(mem, size, alignof(Jobj_info));
-  Jobj_info *i = ku_mem->kern_addr(mem);
+  if (!ku_mem)
+    {
+      f->tag(Kobject_iface::commit_result(-L4_err::EInval));
+      return true;
+    }
+
   Mword skip = utcb->values[3];
 
   Mword count_result = 0;
   Mword count_all = 0;
-  Jdb_mapdb::info_all_obj_mappings(i, skip, size/sizeof(Jobj_info),
+  Jdb_mapdb::info_all_obj_mappings(ku_mem->kern_addr(mem), skip,
+                                   size/sizeof(Jobj_info),
                                    &count_result, &count_all);
   utcb->values[0] = count_result;
   utcb->values[1] = count_all;
