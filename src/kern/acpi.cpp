@@ -396,7 +396,12 @@ Acpi_sdt::print_summary() const
 PUBLIC template< typename T >
 unsigned
 Acpi_sdt_p<T>::entries() const
-{ return (len - sizeof(Acpi_table_head)) / sizeof(ptrs[0]); }
+{
+  if (len <= sizeof(Acpi_table_head))
+    return 0;
+
+  return (len - sizeof(Acpi_table_head)) / sizeof(ptrs[0]);
+}
 
 PUBLIC template< typename SDT >
 void
