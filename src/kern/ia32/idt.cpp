@@ -80,7 +80,7 @@ Idt::init_table(Idt_init_entry *src, Idt_entry *idt)
         {
           // Interrupt/trap gate
           idt[src->vector] = Idt_entry(src->entry, Gdt::gdt_code_kernel, type,
-                                       dpl);
+                                       dpl, src->vector == 8 /*DF*/ ? 1 : 0);
         }
 
       src++;
