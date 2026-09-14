@@ -627,7 +627,8 @@ public:
     len -= _l;
 
     memcpy(_b + _l, str, len);
-    _l = len + _l;
+    _l += len;
+    _b[_l] = 0;
   }
 
 };
