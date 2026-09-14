@@ -119,7 +119,7 @@ Jdb_table::col_ofs(unsigned long first_col, unsigned long col)
       if (c == 0 && has_row_labels())
         w += col_width(0) + 1;
       else
-        w += col_width(first_col + col) + 1;
+        w += col_width(first_col + c) + 1;
     }
 
   return w;
